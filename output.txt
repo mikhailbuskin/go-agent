@@ -1,0 +1,25 @@
+[
+  {
+    "role": "user",
+    "content": "List all files in the current directory using Ubuntu tool"
+  },
+  {
+    "role": "assistant",
+    "content": "",
+    "tool_call": {
+      "id": "call_I7DVAmaIyXxUwbLsW7SYsiE2",
+      "type": "function",
+      "function": {
+        "name": "run_command",
+        "arguments": {
+          "cmd": "ls"
+        }
+      }
+    }
+  },
+  {
+    "role": "tool",
+    "content": "go.mod\ngo.sum\nmain.go\nmain_old.go\noutput.txt\n",
+    "tool_call_id": "call_I7DVAmaIyXxUwbLsW7SYsiE2"
+  }
+]
