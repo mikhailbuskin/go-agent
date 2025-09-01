@@ -116,9 +116,12 @@ func main() {
 
 	ctx := context.TODO()
 
+	// start message history
 	messages := []ChatMessage{
 		{Role: "user", Content: "List all files in the current directory using Ubuntu tool"},
 	}
+	//List all files in the current directory using Ubuntu tool
+	//Go back a folder from the current directory and tell me the contents of it
 
 	// Tool definition
 	tools := []ToolDef{
@@ -140,72 +143,132 @@ func main() {
 		},
 	}
 
-	// Step 1: Send user message
-	req := ChatRequest{
-		Model:    "gpt-4o", // same as openai.ChatModelGPT4o
-		Messages: messages,
-		Tools:    tools,
-	}
+	i := 0
+	//isfirst := true;
+	// BEGIN OF LOOP
+	for true {
 
-	chatResp, err := callOpenAI(ctx, key, req)
-	if err != nil {
-		log.Fatal(err)
-	}
+		// Step 1: Send user message
+		req := ChatRequest{
+			Model:    "gpt-4o", // same as openai.ChatModelGPT4o
+			Messages: messages,
+			Tools:    tools,
+		}
 
-	agentmsg := chatResp.Choices[0].Message
+		chatResp, err := callOpenAI(ctx, key, req)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		agentmsg := chatResp.Choices[0].Message
+
+		// add assistant message
+		messages = append(messages, agentmsg)
+
+		if len(agentmsg.ToolCalls) > 0 {
+			for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
+				if toolCall.Function.Name == TOOL_RUN_COMMAND {
+
+					// get the command
+					var raw string
+					err := json.Unmarshal(toolCall.Function.Arguments, &raw)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					var args struct {
+						Cmd string `json:"cmd"`
+					}
+
+					err = json.Unmarshal([]byte(raw), &args)
+					//err = json.Unmarshal(err)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					// run the command
+					output, err := runCommand(args.Cmd)
+					if err != nil {
+						output = fmt.Sprintf("Error: %v", err)
+					}
+
+					tool_id := toolCall.ID
+
+					messages = append(messages,
+						ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
+					)
+				}
+			}
+		} else {
+			fmt.Println(agentmsg.Content)
+			break
+		}
+
+		i++
+		if i > 10 {
+			break
+		}
+		//isfirst = false;
+
+		// END OF LOOP
+	}
 
 	// Step 2: Check for tool calls
-	if len(agentmsg.ToolCalls) > 0 {
-		for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
-			if toolCall.Function.Name == TOOL_RUN_COMMAND {
+	// if len(agentmsg.ToolCalls) > 0 {
+	// 	for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
+	// 		if toolCall.Function.Name == TOOL_RUN_COMMAND {
 
-				var raw string
-				err := json.Unmarshal(toolCall.Function.Arguments, &raw)
-				// if err == nil {
-				// 	// It was double-encoded, so now unmarshal raw
-				// 	toolCall.Function.Arguments = json.RawMessage(raw)
-				// }
-				if err != nil {
-					panic(err) // switch to Fatal
-				}
+	// 			//toolCall.Function.Arguments = "\"{\\\"cmd\\\":\\\"ls\\\"}\""
+	// 			//deserialize the raw Arguments one time
+	// 			var raw string
+	// 			err := json.Unmarshal(toolCall.Function.Arguments, &raw)
+	// 			//raw = "{\"cmd\":\"ls -a\"}"
 
-				var args struct {
-					Cmd string `json:"cmd"`
-				}
+	// 			// if err == nil {
+	// 			// 	// It was double-encoded, so now unmarshal raw
+	// 			// 	toolCall.Function.Arguments = json.RawMessage(raw)
+	// 			// }
+	// 			if err != nil {
+	// 				log.Fatal(err)
+	// 			}
 
-				err = json.Unmarshal([]byte(raw), &args) // toolCall.Function.Arguments = "\"{\\\"cmd\\\":\\\"ls\\\"}\""
-				//err = json.Unmarshal(err)
-				if err != nil {
-					panic(err) // switch to Fatal
-				}
+	// 			// var args struct {
+	// 			// 	Cmd string `json:"cmd"`
+	// 			// }
+	// 			//var args args
 
-				output, err := runCommand(args.Cmd)
-				if err != nil {
-					output = fmt.Sprintf("Error: %v", err)
-				}
+	// 			err = json.Unmarshal([]byte(raw), &args)
+	// 			//err = json.Unmarshal(err)
+	// 			if err != nil {
+	// 				log.Fatal(err)
+	// 			}
 
-				tool_id := toolCall.ID
+	// 			output, err := runCommand(args.Cmd)
+	// 			if err != nil {
+	// 				output = fmt.Sprintf("Error: %v", err)
+	// 			}
 
-				// Send tool output back
-				messages = append(messages,
-					ChatMessage{Role: "assistant", Content: agentmsg.Content, ToolCalls: []ToolCall{toolCall}},
-					ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
-				)
+	// 			tool_id := toolCall.ID
 
-				chatResp, err = callOpenAI(ctx, key, ChatRequest{
-					Model:    "gpt-4o",
-					Messages: messages,
-				})
-				// json_str, err := json.MarshalIndent(messages, "", "  ")
-				// os.WriteFile("output.json", []byte(json_str), 0644)
-				if err != nil {
-					panic(err) // *errors.errorString {s: "API error: {\n  \"error\": {\n    \"message\": \"Invalid parameter: messages with role 'tool' must be a response to a preceeding message with 'tool_calls'.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"messages.[2].role\",\n    \"code\": null\n  }\n}"}
-				}
+	// 			// Send tool output back
+	// 			messages = append(messages,
+	// 				ChatMessage{Role: "assistant", Content: agentmsg.Content, ToolCalls: []ToolCall{toolCall}},
+	// 				ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
+	// 			)
 
-				fmt.Println(chatResp.Choices[0].Message.Content)
-			}
-		}
-	} else {
-		fmt.Println(agentmsg.Content)
-	}
+	// 			// chatResp, err = callOpenAI(ctx, key, ChatRequest{
+	// 			// 	Model:    "gpt-4o",
+	// 			// 	Messages: messages,
+	// 			// })
+
+	// 			// if err != nil {
+	// 			// 	log.Fatal(err) // *errors.errorString {s: "API error: {\n  \"error\": {\n    \"message\": \"Invalid parameter: messages with role 'tool' must be a response to a preceeding message with 'tool_calls'.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"messages.[2].role\",\n    \"code\": null\n  }\n}"}
+	// 			// }
+
+	// 			// fmt.Println(chatResp.Choices[0].Message.Content)
+	// 		}
+	// 	}
+	// }
+	// 	fmt.Println(agentmsg.Content)
+	// }
 }
