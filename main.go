@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -270,106 +271,123 @@ func main() {
 
 	ctx := context.TODO()
 
-	// start message history
-	messages := []ChatMessage{
-		{Role: "user", Content: "List all files in the current directory using Ubuntu tool"},
-	}
-	//Say this is a test
-	//List all files in the current directory using Ubuntu tool
-	//Go back a folder from the current directory and tell me the contents of it
+	reader := bufio.NewReader(os.Stdin)
 
-	// Tool definition
-	tools := []ToolDef{
-		{
-			Type: "function",
-			Function: FunctionDef{
-				Name:        TOOL_RUN_COMMAND,
-				Description: "Run a command in Ubuntu WSL shell",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"cmd": map[string]string{
-							"type": "string",
+	// Start of conversation loop
+	for true {
+		//prompt := ""
+
+		fmt.Print("Enter prompt: ")
+		//fmt.Scanln(&prompt)
+		//prompt = "Say this is a test"
+		prompt, _ := reader.ReadString('\n')
+		prompt = strings.TrimSpace(prompt)
+
+		if prompt == "end" {
+			break
+		}
+
+		// start message history
+		messages := []ChatMessage{
+			{Role: "user", Content: prompt},
+		}
+		//Say this is a test
+		//List all files in the current directory using Ubuntu tool
+		//Go back a folder from the current directory and tell me the contents of it
+
+		// Tool definition
+		tools := []ToolDef{
+			{
+				Type: "function",
+				Function: FunctionDef{
+					Name:        TOOL_RUN_COMMAND,
+					Description: "Run a command in Ubuntu WSL shell",
+					Parameters: map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"cmd": map[string]string{
+								"type": "string",
+							},
 						},
+						"required": []string{"cmd"},
 					},
-					"required": []string{"cmd"},
 				},
 			},
-		},
-	}
-
-	i := 0
-
-	// START OF TOOL LOOP
-	for true {
-
-		// Step 1: Send user message
-		req := ChatRequest{
-			Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
-			Messages: messages,
-			Tools:    tools,
-			Stream:   true,
 		}
 
-		//chatResp, err := callOpenAI(ctx, key, req)
-		chatResp, err := callOpenAIStream(ctx, key, req)
-		if err != nil {
-			log.Fatal(err)
-		}
+		i := 0
 
-		agentmsg := chatResp.Choices[0].Message
+		// START OF TOOL LOOP
+		for true {
 
-		// add assistant message
-		messages = append(messages, agentmsg)
-
-		//break
-
-		if len(agentmsg.ToolCalls) > 0 {
-			for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
-				if toolCall.Function.Name == TOOL_RUN_COMMAND {
-
-					// arguments no longer double serialized so no need for this code
-					// get the command
-					var raw string
-					err := json.Unmarshal(toolCall.Function.Arguments, &raw)
-					if err != nil {
-						log.Fatal(err)
-					}
-
-					var args struct {
-						Cmd string `json:"cmd"`
-					}
-
-					//err = json.Unmarshal(toolCall.Function.Arguments, &args)
-					err = json.Unmarshal([]byte(raw), &args)
-					//err = json.Unmarshal(err)
-					if err != nil {
-						log.Fatal(err)
-					}
-
-					// run the command
-					output, err := runCommand(args.Cmd)
-					if err != nil {
-						output = fmt.Sprintf("Error: %v", err)
-					}
-
-					tool_id := toolCall.ID
-
-					messages = append(messages,
-						ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
-					)
-				}
+			// Step 1: Send user message
+			req := ChatRequest{
+				Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
+				Messages: messages,
+				Tools:    tools,
+				Stream:   true,
 			}
-		} else {
-			//fmt.Println(agentmsg.Content)
-			break
-		}
 
-		i++
-		if i > 10 {
-			break
-		}
+			//chatResp, err := callOpenAI(ctx, key, req)
+			chatResp, err := callOpenAIStream(ctx, key, req)
+			if err != nil {
+				log.Fatal(err)
+			}
 
+			agentmsg := chatResp.Choices[0].Message
+
+			// add assistant message
+			messages = append(messages, agentmsg)
+
+			//break
+
+			if len(agentmsg.ToolCalls) > 0 {
+				for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
+					if toolCall.Function.Name == TOOL_RUN_COMMAND {
+
+						// arguments no longer double serialized so no need for this code
+						// get the command
+						var raw string
+						err := json.Unmarshal(toolCall.Function.Arguments, &raw)
+						if err != nil {
+							log.Fatal(err)
+						}
+
+						var args struct {
+							Cmd string `json:"cmd"`
+						}
+
+						//err = json.Unmarshal(toolCall.Function.Arguments, &args)
+						err = json.Unmarshal([]byte(raw), &args)
+						//err = json.Unmarshal(err)
+						if err != nil {
+							log.Fatal(err)
+						}
+
+						// run the command
+						output, err := runCommand(args.Cmd)
+						if err != nil {
+							output = fmt.Sprintf("Error: %v", err)
+						}
+
+						tool_id := toolCall.ID
+
+						messages = append(messages,
+							ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
+						)
+					}
+				}
+			} else {
+				//fmt.Println(agentmsg.Content)
+				break
+			}
+
+			i++
+			if i > 10 {
+				break
+			}
+
+		}
 	}
 	// END OF TOOL LOOP
 }
