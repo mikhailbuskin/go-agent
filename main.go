@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -21,11 +22,11 @@ func runCommand(cmd string) (string, error) {
 }
 
 type ChatMessage struct {
-	Role    string `json:"role"`
+	Role    string `json:"role"`    // role: "user" / "assistant" / "tool"
 	Content string `json:"content"` // can't be omitempty, required field
 	//ToolCall   *ToolCall  `json:"tool_call,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // this field is only needed and used when role:"assistant"
+	ToolCallID string     `json:"tool_call_id,omitempty"` // this field is only needed and used when role:"tool"
 }
 
 type ToolCall struct {
@@ -43,6 +44,7 @@ type ChatRequest struct {
 	Model    string        `json:"model"`
 	Messages []ChatMessage `json:"messages"`
 	Tools    []ToolDef     `json:"tools,omitempty"`
+	Stream   bool          `json:"stream"`
 }
 
 type ToolDef struct {
@@ -57,7 +59,8 @@ type FunctionDef struct {
 }
 
 type Choice struct {
-	Message ChatMessage `json:"message"`
+	//Message ChatMessage `json:"message"`
+	Message ChatMessage `json:"delta"`
 }
 
 type ChatResponse struct {
@@ -92,8 +95,159 @@ func callOpenAI(ctx context.Context, apiKey string, reqBody ChatRequest) (*ChatR
 	}
 
 	var chatResp ChatResponse
-	if err := json.Unmarshal(data, &chatResp); err != nil {
+	err = json.Unmarshal(data, &chatResp)
+	if err != nil {
 		return nil, err
+	}
+	return &chatResp, nil
+}
+
+func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest) (*ChatResponse, error) { //With streaming there is no ChatResponce being returned at once
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var chatResp ChatResponse
+
+	//storing the streaming data
+	var content string
+	var argument string
+	// f, err := os.OpenFile("response.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// defer f.Close()
+
+	areToolCalls := false
+
+	errMes := ""
+	errCount := 0
+
+	i := 0
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		//os.WriteFile("response.txt", []byte(line+"\n"), os.ModeAppend)
+
+		// Skip empty lines & [DONE]
+		if line == "" {
+			continue
+		} else if line == "data: [DONE]" {
+			break
+		}
+		// if len(line) > 6 && line[:6] == "data: " {
+		// 	line = line[6:]
+		// }
+
+		// Streaming API Response
+		// data: {"id":"...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+		// data: {"id":"...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"}}]}
+		// data: {"id":"...","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":" world"}}]}
+		// ...
+		// data: [DONE]
+
+		if !(len(line) > 6 && line[:6] == "data: ") {
+			errMes += line
+			errCount++
+			if errCount > 10 {
+				log.Fatal(errMes)
+			}
+			continue
+		}
+		line = line[6:]
+
+		//var formated_line map[string]any
+		// err := json.Unmarshal([]byte(line), &formated_line)
+		// data, _ := json.MarshalIndent(formated_line, "", " ")
+		// os.WriteFile("output.json", data, 0644)
+
+		// easier to read format of assistent output
+		var data StreamResponse
+		err := json.Unmarshal([]byte(line), &data)
+		if err != nil {
+			log.Fatal(err)
+		}
+		//fmt.Println(data)
+
+		// var chunk struct {
+		// 	Choices []struct {
+		// 		Delta struct {
+		// 			Content   string `json:"content"`
+		// 			ToolCalls string `json:tool_calls`
+		// 		} `json:"delta"`
+		// 	} `json:"choices"`
+		// }
+
+		//forming the Response to later use for message history
+		if areToolCalls == true {
+			chatResp.Choices[0].Message.ToolCalls[0].Function.Arguments = nil
+		}
+		// chatResp.Choices[0].Message.ToolCalls = []ToolCall{
+		// 	{
+		// 		Function: ToolFunction{
+		// 			Arguments: []byte("{}"),
+		// 		},
+		// 	},
+		// }
+
+		err = json.Unmarshal([]byte(line), &chatResp)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(chatResp.Choices[0].Message.ToolCalls) > 0 {
+			areToolCalls = true
+		}
+
+		if len(chatResp.Choices) > 0 {
+			delta := chatResp.Choices[0].Message
+			content += delta.Content
+			if areToolCalls == true {
+				argsStr := ""
+				_ = json.Unmarshal(delta.ToolCalls[0].Function.Arguments, &argsStr)
+				argument += argsStr
+			}
+			fmt.Print(delta.Content) // prints piece by piece
+		}
+
+		i++
+	}
+	// chatResp.Choices[0].Message.Role = "assistant"
+	chatResp.Choices[0].Message.Content = content
+
+	farg, err := json.Marshal(argument)
+	if err != nil {
+		return nil, err
+	}
+
+	if areToolCalls == true {
+		chatResp.Choices[0].Message.ToolCalls[0].Function.Arguments = farg
+	}
+
+	// chatResp := ChatResponse{
+	// 	Choices: []Choice{
+	// 		{ // [0]
+	// 			Message: ChatMessage{
+	// 				Role:    "assistant",
+	// 				Content: content,
+	// 			},
+	// 		},
+	// 	},
+	// }
+	if content != "" {
+		fmt.Println("\n--- stream done ---")
 	}
 	return &chatResp, nil
 }
@@ -120,6 +274,7 @@ func main() {
 	messages := []ChatMessage{
 		{Role: "user", Content: "List all files in the current directory using Ubuntu tool"},
 	}
+	//Say this is a test
 	//List all files in the current directory using Ubuntu tool
 	//Go back a folder from the current directory and tell me the contents of it
 
@@ -144,18 +299,20 @@ func main() {
 	}
 
 	i := 0
-	//isfirst := true;
-	// BEGIN OF LOOP
+
+	// START OF TOOL LOOP
 	for true {
 
 		// Step 1: Send user message
 		req := ChatRequest{
-			Model:    "gpt-4o", // same as openai.ChatModelGPT4o
+			Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
 			Messages: messages,
 			Tools:    tools,
+			Stream:   true,
 		}
 
-		chatResp, err := callOpenAI(ctx, key, req)
+		//chatResp, err := callOpenAI(ctx, key, req)
+		chatResp, err := callOpenAIStream(ctx, key, req)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -165,10 +322,13 @@ func main() {
 		// add assistant message
 		messages = append(messages, agentmsg)
 
+		//break
+
 		if len(agentmsg.ToolCalls) > 0 {
 			for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
 				if toolCall.Function.Name == TOOL_RUN_COMMAND {
 
+					// arguments no longer double serialized so no need for this code
 					// get the command
 					var raw string
 					err := json.Unmarshal(toolCall.Function.Arguments, &raw)
@@ -180,6 +340,7 @@ func main() {
 						Cmd string `json:"cmd"`
 					}
 
+					//err = json.Unmarshal(toolCall.Function.Arguments, &args)
 					err = json.Unmarshal([]byte(raw), &args)
 					//err = json.Unmarshal(err)
 					if err != nil {
@@ -200,7 +361,7 @@ func main() {
 				}
 			}
 		} else {
-			fmt.Println(agentmsg.Content)
+			//fmt.Println(agentmsg.Content)
 			break
 		}
 
@@ -208,67 +369,7 @@ func main() {
 		if i > 10 {
 			break
 		}
-		//isfirst = false;
 
-		// END OF LOOP
 	}
-
-	// Step 2: Check for tool calls
-	// if len(agentmsg.ToolCalls) > 0 {
-	// 	for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
-	// 		if toolCall.Function.Name == TOOL_RUN_COMMAND {
-
-	// 			//toolCall.Function.Arguments = "\"{\\\"cmd\\\":\\\"ls\\\"}\""
-	// 			//deserialize the raw Arguments one time
-	// 			var raw string
-	// 			err := json.Unmarshal(toolCall.Function.Arguments, &raw)
-	// 			//raw = "{\"cmd\":\"ls -a\"}"
-
-	// 			// if err == nil {
-	// 			// 	// It was double-encoded, so now unmarshal raw
-	// 			// 	toolCall.Function.Arguments = json.RawMessage(raw)
-	// 			// }
-	// 			if err != nil {
-	// 				log.Fatal(err)
-	// 			}
-
-	// 			// var args struct {
-	// 			// 	Cmd string `json:"cmd"`
-	// 			// }
-	// 			//var args args
-
-	// 			err = json.Unmarshal([]byte(raw), &args)
-	// 			//err = json.Unmarshal(err)
-	// 			if err != nil {
-	// 				log.Fatal(err)
-	// 			}
-
-	// 			output, err := runCommand(args.Cmd)
-	// 			if err != nil {
-	// 				output = fmt.Sprintf("Error: %v", err)
-	// 			}
-
-	// 			tool_id := toolCall.ID
-
-	// 			// Send tool output back
-	// 			messages = append(messages,
-	// 				ChatMessage{Role: "assistant", Content: agentmsg.Content, ToolCalls: []ToolCall{toolCall}},
-	// 				ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
-	// 			)
-
-	// 			// chatResp, err = callOpenAI(ctx, key, ChatRequest{
-	// 			// 	Model:    "gpt-4o",
-	// 			// 	Messages: messages,
-	// 			// })
-
-	// 			// if err != nil {
-	// 			// 	log.Fatal(err) // *errors.errorString {s: "API error: {\n  \"error\": {\n    \"message\": \"Invalid parameter: messages with role 'tool' must be a response to a preceeding message with 'tool_calls'.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"messages.[2].role\",\n    \"code\": null\n  }\n}"}
-	// 			// }
-
-	// 			// fmt.Println(chatResp.Choices[0].Message.Content)
-	// 		}
-	// 	}
-	// }
-	// 	fmt.Println(agentmsg.Content)
-	// }
+	// END OF TOOL LOOP
 }
