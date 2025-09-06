@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/fatih/color"
+
 	"github.com/joho/godotenv"
 )
 
@@ -192,7 +194,7 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest) (
 		// }
 
 		//forming the Response to later use for message history
-		if areToolCalls == true {
+		if areToolCalls == true { // this also works as i!=0 because areToolCalls is always equal to false the first time over
 			chatResp.Choices[0].Message.ToolCalls[0].Function.Arguments = nil
 		}
 		// chatResp.Choices[0].Message.ToolCalls = []ToolCall{
@@ -202,6 +204,10 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest) (
 		// 		},
 		// 	},
 		// }
+
+		if len(chatResp.Choices) > 0 {
+			chatResp.Choices[0].Message.Content = ""
+		}
 
 		err = json.Unmarshal([]byte(line), &chatResp)
 		if err != nil {
@@ -247,8 +253,12 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest) (
 	// 		},
 	// 	},
 	// }
+
 	if content != "" {
-		fmt.Println("\n--- stream done ---")
+		// color.Set(color.FgYellow)
+		// fmt.Print("\n--- stream done ---")
+		// color.Set(color.FgWhite)
+		fmt.Println()
 	}
 	return &chatResp, nil
 }
@@ -259,7 +269,7 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	// test command
+	// testing command
 	// out, err := runCommand("ls -la")
 	// if err != nil {
 	// 	log.Fatal(err.Error())
@@ -271,54 +281,72 @@ func main() {
 
 	ctx := context.TODO()
 
+	// Tool definition
+	tools := []ToolDef{
+		{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        TOOL_RUN_COMMAND,
+				Description: "Run a command in Ubuntu WSL shell",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"cmd": map[string]string{
+							"type": "string",
+						},
+					},
+					"required": []string{"cmd"},
+				},
+			},
+		},
+	}
+
 	reader := bufio.NewReader(os.Stdin)
+
+	messages := []ChatMessage{}
+
+	/*messages example:
+	[
+	{role:user, message:"show me all files in the current folder"},
+	// ai calls tool
+	{role:assistant, message:"", "call_tools": [{},{}]},
+	// error came
+	{role:tool, message:"", "content":"tool1 result"},
+	{role:tool, message:"", "content":"tool2 result"},
+	// ai corrects tool call
+	{role:assistant, message:"", "call_tools": [..]},
+	// tool call returns result
+	{role:tool, message:"", "content":"1.txt 2.txt"}
+	// ai returns content
+	{role:assistant, content:"Here are files which lays in the current folder."}
+	]
+	*/
 
 	// Start of conversation loop
 	for true {
-		//prompt := ""
+		color.Set(color.FgHiBlue)
 
 		fmt.Print("Enter prompt: ")
-		//fmt.Scanln(&prompt)
-		//prompt = "Say this is a test"
 		prompt, _ := reader.ReadString('\n')
 		prompt = strings.TrimSpace(prompt)
+		//prompt := "Hello"
 
 		if prompt == "end" {
 			break
 		}
 
-		// start message history
-		messages := []ChatMessage{
-			{Role: "user", Content: prompt},
-		}
+		color.Set(color.FgWhite)
+
+		// add user's prompt to message history
+		messages = append(messages, ChatMessage{Role: "user", Content: prompt})
 		//Say this is a test
 		//List all files in the current directory using Ubuntu tool
 		//Go back a folder from the current directory and tell me the contents of it
 
-		// Tool definition
-		tools := []ToolDef{
-			{
-				Type: "function",
-				Function: FunctionDef{
-					Name:        TOOL_RUN_COMMAND,
-					Description: "Run a command in Ubuntu WSL shell",
-					Parameters: map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"cmd": map[string]string{
-								"type": "string",
-							},
-						},
-						"required": []string{"cmd"},
-					},
-				},
-			},
-		}
-
 		i := 0
 
 		// START OF TOOL LOOP
-		for true {
+		for {
 
 			// Step 1: Send user message
 			req := ChatRequest{
@@ -339,8 +367,6 @@ func main() {
 			// add assistant message
 			messages = append(messages, agentmsg)
 
-			//break
-
 			if len(agentmsg.ToolCalls) > 0 {
 				for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
 					if toolCall.Function.Name == TOOL_RUN_COMMAND {
@@ -357,9 +383,7 @@ func main() {
 							Cmd string `json:"cmd"`
 						}
 
-						//err = json.Unmarshal(toolCall.Function.Arguments, &args)
 						err = json.Unmarshal([]byte(raw), &args)
-						//err = json.Unmarshal(err)
 						if err != nil {
 							log.Fatal(err)
 						}
