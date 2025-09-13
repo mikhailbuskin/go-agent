@@ -11,6 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
+func updateMemory(messages *[]ChatMessage, fileName string) {
+	data, _ := json.MarshalIndent(messages, "", " ") // json.MarshalIndent (and json.Marshal) can take either a value or a pointer to a value/structure. It doesn’t require the value specifically.
+	os.WriteFile(fileName, data, 0644)
+}
+
 func agentWeb(prompt string, w http.ResponseWriter) {
 
 	// testing command
@@ -61,7 +66,35 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	{role:assistant, content:"Here are files which lays in the current folder."}
 	]
 	*/
+
+	fileName := "messages.json" // Replace with the name of the file you want to check
+
 	messages := []ChatMessage{}
+
+	// Check if file exists.
+	_, err := os.Stat(fileName)
+	if err != nil {
+		// File doesn't exit
+
+		// var formated_line map[string]any
+		// err := json.Unmarshal([]byte(line), &formated_line)
+
+		// Write file for messages to save
+		updateMemory(&messages, fileName)
+	} else {
+		// File exists
+
+		// Read file
+		contents, err := os.ReadFile(fileName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Load file into messages
+		err = json.Unmarshal(contents, &messages)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	randkey := (uuid.New()).String() // generates a random UUID (version 4)
 
@@ -76,6 +109,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 	// add user's prompt to message history
 	messages = append(messages, ChatMessage{Role: "user", Content: prompt})
+	updateMemory(&messages, fileName)
 	//Say this is a test
 	//List all files in the current directory using Ubuntu tool
 	//Go back a folder from the current directory and tell me the contents of it
@@ -103,6 +137,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 		// add assistant message
 		messages = append(messages, agentmsg)
+		updateMemory(&messages, fileName)
 
 		if len(agentmsg.ToolCalls) > 0 {
 			for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
@@ -136,6 +171,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 					messages = append(messages,
 						ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
 					)
+					updateMemory(&messages, fileName)
 				}
 			}
 		} else {
