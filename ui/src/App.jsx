@@ -3,21 +3,22 @@ import { motion } from "framer-motion";
 
 export default function App() {
   const [messages, setMessages] = useState([
-    { role: "ai", content: "Hello! How can I help you today?" },
+    { role: "assistant", content: "Hello! How can I help you today?" },
   ]);
   const [input, setInput] = useState("");
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!input.trim()) return;
     setMessages([...messages, { role: "user", content: input }]);
     setInput("");
     // Here you can add API call to your AI backend and push response
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        { role: "ai", content: "This is a sample AI response." },
-      ]);
-    }, 800);
+    var data = {message: input}
+    var res = await fetch("http://localhost:8080/api/chat", { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)})
+    var json = await res.json();
+    setMessages(prev => [
+      ...prev,
+      { role: "assistant", content: json.content },
+    ]);
   };
 
   return (
