@@ -65,7 +65,7 @@ type ChatResponse struct {
 
 const TOOL_RUN_COMMAND = "run_command"
 
-func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest) (*ChatResponse, error) { //With streaming there is no ChatResponce being returned at once
+func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w http.ResponseWriter) (*ChatResponse, error) { //With streaming there is no ChatResponce being returned at once
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, err
@@ -186,7 +186,14 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest) (
 				_ = json.Unmarshal(delta.ToolCalls[0].Function.Arguments, &argsStr)
 				argument += argsStr
 			}
-			fmt.Print(delta.Content) // prints piece by piece
+			if delta.Content != "" {
+				fmt.Print(delta.Content) // prints piece by piece
+				// Send the message
+				err := sendWebMessage(delta.Content, w)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 
 		i++

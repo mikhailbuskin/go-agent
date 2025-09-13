@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+
+	"github.com/google/uuid"
 )
 
-func agentWeb(prompt string) string {
+func agentWeb(prompt string, w http.ResponseWriter) {
 
 	// testing command
 	// out, err := runCommand("ls -la")
@@ -60,95 +63,100 @@ func agentWeb(prompt string) string {
 	*/
 	messages := []ChatMessage{}
 
-	// randkey := (uuid.New()).String() // generates a random UUID (version 4)
+	randkey := (uuid.New()).String() // generates a random UUID (version 4)
 
-	// fmt.Println(randkey)
+	randkey = randkey
 
 	// Start of conversation loop
-	for true {
+	//for true {
 
-		// if prompt == "end" {
-		// 	break
-		// }
+	// if prompt == "end" {
+	// 	break
+	// }
 
-		// add user's prompt to message history
-		messages = append(messages, ChatMessage{Role: "user", Content: prompt})
-		//Say this is a test
-		//List all files in the current directory using Ubuntu tool
-		//Go back a folder from the current directory and tell me the contents of it
+	// add user's prompt to message history
+	messages = append(messages, ChatMessage{Role: "user", Content: prompt})
+	//Say this is a test
+	//List all files in the current directory using Ubuntu tool
+	//Go back a folder from the current directory and tell me the contents of it
 
-		i := 0
+	i := 0
 
-		// START OF TOOL LOOP
-		for {
+	// START OF TOOL LOOP
+	for {
 
-			// Step 1: Send user message
-			req := ChatRequest{
-				Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
-				Messages: messages,
-				Tools:    tools,
-				Stream:   true,
+		// Step 1: Send user message
+		req := ChatRequest{
+			Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
+			Messages: messages,
+			Tools:    tools,
+			Stream:   true,
+		}
+
+		//chatResp, err := callOpenAI(ctx, key, req)
+		chatResp, err := callOpenAIStream(ctx, key, req, w)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		agentmsg := chatResp.Choices[0].Message
+
+		// add assistant message
+		messages = append(messages, agentmsg)
+
+		if len(agentmsg.ToolCalls) > 0 {
+			for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
+				if toolCall.Function.Name == TOOL_RUN_COMMAND {
+
+					// arguments no longer double serialized so no need for this code
+					// get the command
+					var raw string
+					err := json.Unmarshal(toolCall.Function.Arguments, &raw)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					var args struct {
+						Cmd string `json:"cmd"`
+					}
+
+					err = json.Unmarshal([]byte(raw), &args)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					// run the command
+					output, err := runCommand(args.Cmd)
+					if err != nil {
+						output = fmt.Sprintf("Error: %v", err)
+					}
+
+					tool_id := toolCall.ID
+
+					messages = append(messages,
+						ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
+					)
+				}
 			}
+		} else {
+			//fmt.Println(agentmsg.Content)
+			// err := sendWebMessage("---end---", w)
+			// if err != nil {
+			// 	log.Fatal(err)
+			// }
+			break
+		}
 
-			//chatResp, err := callOpenAI(ctx, key, req)
-			chatResp, err := callOpenAIStream(ctx, key, req)
+		i++
+		if i > 10 {
+			err := sendWebMessage("Loop Run Limit Exceeded", w)
 			if err != nil {
 				log.Fatal(err)
 			}
-
-			agentmsg := chatResp.Choices[0].Message
-
-			// add assistant message
-			messages = append(messages, agentmsg)
-
-			if len(agentmsg.ToolCalls) > 0 {
-				for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
-					if toolCall.Function.Name == TOOL_RUN_COMMAND {
-
-						// arguments no longer double serialized so no need for this code
-						// get the command
-						var raw string
-						err := json.Unmarshal(toolCall.Function.Arguments, &raw)
-						if err != nil {
-							log.Fatal(err)
-						}
-
-						var args struct {
-							Cmd string `json:"cmd"`
-						}
-
-						err = json.Unmarshal([]byte(raw), &args)
-						if err != nil {
-							log.Fatal(err)
-						}
-
-						// run the command
-						output, err := runCommand(args.Cmd)
-						if err != nil {
-							output = fmt.Sprintf("Error: %v", err)
-						}
-
-						tool_id := toolCall.ID
-
-						messages = append(messages,
-							ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
-						)
-					}
-				}
-			} else {
-				//fmt.Println(agentmsg.Content)
-				return agentmsg.Content
-				//break
-			}
-
-			i++
-			if i > 10 {
-				return "Loop Run Limit Exceeded"
-				//break
-			}
-
+			break
 		}
+
 	}
+	//}
 	// END OF TOOL LOOP
-	return ""
 }

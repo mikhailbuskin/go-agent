@@ -7,19 +7,57 @@ export default function App() {
   ]);
   const [input, setInput] = useState("");
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-    setMessages([...messages, { role: "user", content: input }]);
-    setInput("");
-    // Here you can add API call to your AI backend and push response
-    var data = {message: input}
-    var res = await fetch("http://localhost:8080/api/chat", { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)})
-    var json = await res.json();
-    setMessages(prev => [
-      ...prev,
-      { role: "assistant", content: json.content },
-    ]);
-  };
+const sendMessage = async () => {
+  if (!input.trim()) return;
+
+  // Add user's message
+  setMessages([...messages, { role: "user", content: input }]);
+  setInput("");
+
+  const data = { message: input };
+  const res = await fetch("http://localhost:8080/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let assistantMessage = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    // Decode the chunk into a string
+    const chunk = decoder.decode(value, { stream: true });
+
+    // Split by newlines (each line is a separate JSON object)
+    const lines = chunk.split("\n").filter(Boolean);
+
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line);
+        assistantMessage += parsed.content;
+
+        // Update the UI progressively
+        setMessages((prev) => {
+          // Replace the last assistant message (or append if none yet)
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant") {
+            const newPrev = [...prev];
+            newPrev[newPrev.length - 1] = { ...last, content: assistantMessage };
+            return newPrev;
+          } else {
+            return [...prev, { role: "assistant", content: assistantMessage }];
+          }
+        });
+      } catch (err) {
+        console.error("Failed to parse chunk:", line, err);
+      }
+    }
+  }
+};
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-100 text-gray-900">
@@ -36,7 +74,7 @@ export default function App() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className={`max-w-md p-3 rounded-2xl shadow-sm text-sm whitespace-pre-line ${
+            className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-line ${
               msg.role === "user"
                 ? "ml-auto bg-blue-500 text-white"
                 : "mr-auto bg-white"

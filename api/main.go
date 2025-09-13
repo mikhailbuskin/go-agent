@@ -24,8 +24,9 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
+	// args is what you put after the run command. So in "go run . cli something" the argument[1] would be "cli" and argument[2] would be "something"
 	if len(os.Args) > 1 && os.Args[1] == "cli" {
-		agentConsole()
+		//agentConsole()
 	} else {
 		fmt.Println("Listening to port 8080")
 		mux := http.NewServeMux()
@@ -36,19 +37,46 @@ func main() {
 
 func chatHandler(w http.ResponseWriter, r *http.Request) {
 	var req APIChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	responce := agentWeb(req.Message)
+	agentWeb(req.Message, w)
 	// Call your AI agent logic here
 	//aiResponse := "Echo: " + req.Message
-	aiResponse := responce
+	//aiResponse := responce
 
-	res := APIChatResponse{Content: aiResponse}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
+	// res := APIChatResponse{Content: response}
+	// w.Header().Set("Content-Type", "application/json")
+	// json.NewEncoder(w).Encode(res)
+}
+
+func sendWebMessage(content string, w http.ResponseWriter) error {
+	// res := APIChatResponse{Content: response}
+	// w.Header().Set("Content-Type", "application/json")
+	// w.Header().Set("Cache-Control", "no-cache")
+	// w.Header().Set("Connection", "keep-alive")
+	// json.NewEncoder(w).Encode(res)
+
+	msg := APIChatResponse{Content: content}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	// Write JSON + newline
+	if _, err := w.Write(append(data, '\n')); err != nil {
+		return err
+	}
+
+	// Force flush so client receives immediately
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	return nil
 }
 
 func enableCORS(next http.Handler) http.Handler {
