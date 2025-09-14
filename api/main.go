@@ -14,6 +14,10 @@ type APIChatRequest struct {
 	Message string `json:"message"`
 }
 
+type APIChatMemoryResponse struct {
+	Messages []ChatMessage `json:"messages"`
+}
+
 type APIChatResponse struct {
 	Content string `json:"content"`
 }
@@ -31,8 +35,53 @@ func main() {
 		fmt.Println("Listening to port 8080")
 		mux := http.NewServeMux()
 		mux.HandleFunc("/api/chat", chatHandler)
+		mux.HandleFunc("/api/memory", sendMemory)
 		http.ListenAndServe(":8080", enableCORS(mux))
 	}
+}
+
+func sendMemory(w http.ResponseWriter, r *http.Request) {
+	fileName := "messages.json"
+
+	var messages []ChatMessage
+	var filtered []ChatMessage
+
+	// Check if file exists.
+	_, err := os.Stat(fileName)
+	if err != nil {
+		// File doesn't exit
+		filtered = []ChatMessage{}
+		// Return empty messages
+
+	} else {
+		// File exists
+
+		// Read file
+		byteMessages, err := os.ReadFile(fileName) // Read File gives you the contents in []byte data type
+		json.Unmarshal(byteMessages, &messages)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for _, msg := range messages {
+			if msg.Role == "assistant" || msg.Role == "user" {
+				if msg.Content != "" {
+					filtered = append(filtered, msg)
+				}
+			}
+		}
+	}
+
+	res := APIChatMemoryResponse{Messages: filtered}
+	bytes, err := json.Marshal(res)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	//json.NewEncoder(w).Encode(res)
+	w.Write(bytes)
 }
 
 func chatHandler(w http.ResponseWriter, r *http.Request) {

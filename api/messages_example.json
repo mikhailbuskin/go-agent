@@ -1,0 +1,53 @@
+[
+ {
+  "role": "user",
+  "content": "Hello?"
+ },
+ {
+  "role": "assistant",
+  "content": "Hello! How can I assist you today?"
+ },
+ {
+  "role": "user",
+  "content": "Hello"
+ },
+ {
+  "role": "assistant",
+  "content": "Hi again! How can I help you?"
+ },
+ {
+  "role": "user",
+  "content": "How many times did I say hello?"
+ },
+ {
+  "role": "assistant",
+  "content": "You said \"hello\" three times. Would you like to know anything else?"
+ },
+ {
+  "role": "user",
+  "content": "What is my current directory?"
+ },
+ {
+  "role": "assistant",
+  "content": "",
+  "tool_calls": [
+   {
+    "id": "call_CMlutN0fmcn9c4l6DkBiAu3E",
+    "type": "function",
+    "function": {
+     "name": "run_command",
+     "arguments": "{\"cmd\":\"pwd\"}"
+    }
+   }
+  ]
+ },
+ {
+  "role": "tool",
+  "content": "/mnt/c/work/go-agent/api\n",
+  "tool_call_id": "call_CMlutN0fmcn9c4l6DkBiAu3E"
+ },
+ {
+  "role": "assistant",
+  "content": "Your current directory is `/mnt/c/work/go-agent/api`. Is there anything else you would like to know?"
+ }
+]

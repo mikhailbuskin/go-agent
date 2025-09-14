@@ -1,63 +1,75 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
 export default function App() {
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hello! How can I help you today?" },
-  ]);
+  const [messages, setMessages] = useState([]);
+
+
+  const loadMessages = async () => {
+    // retrieve messages memory
+    // method is GET not POST because not sending anything. Just retrieving data
+    var res = await fetch("http://localhost:8080/api/memory", { method: 'GET', headers: {'Content-Type': 'application/json'}}) // no body because no message needed to be sent. Just a signal to retrieve the messages
+    var outputData = await res.json();
+    setMessages(outputData.messages);
+  }
+
+  useEffect(() => {
+    loadMessages();
+  },[])
+
   const [input, setInput] = useState("");
 
-const sendMessage = async () => {
-  if (!input.trim()) return;
+  const sendMessage = async () => {
+    if (!input.trim()) return;
 
-  // Add user's message
-  setMessages([...messages, { role: "user", content: input }]);
-  setInput("");
+    // Add user's message
+    setMessages([...messages, { role: "user", content: input }]);
+    setInput("");
 
-  const data = { message: input };
-  const res = await fetch("http://localhost:8080/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+    const data = { message: input };
+    const res = await fetch("http://localhost:8080/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let assistantMessage = "";
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let assistantMessage = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    // Decode the chunk into a string
-    const chunk = decoder.decode(value, { stream: true });
+      // Decode the chunk into a string
+      const chunk = decoder.decode(value, { stream: true });
 
-    // Split by newlines (each line is a separate JSON object)
-    const lines = chunk.split("\n").filter(Boolean);
+      // Split by newlines (each line is a separate JSON object)
+      const lines = chunk.split("\n").filter(Boolean);
 
-    for (const line of lines) {
-      try {
-        const parsed = JSON.parse(line);
-        assistantMessage += parsed.content;
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line);
+          assistantMessage += parsed.content;
 
-        // Update the UI progressively
-        setMessages((prev) => {
-          // Replace the last assistant message (or append if none yet)
-          const last = prev[prev.length - 1];
-          if (last && last.role === "assistant") {
-            const newPrev = [...prev];
-            newPrev[newPrev.length - 1] = { ...last, content: assistantMessage };
-            return newPrev;
-          } else {
-            return [...prev, { role: "assistant", content: assistantMessage }];
-          }
-        });
-      } catch (err) {
-        console.error("Failed to parse chunk:", line, err);
+          // Update the UI progressively
+          setMessages((prev) => {
+            // Replace the last assistant message (or append if none yet)
+            const last = prev[prev.length - 1];
+            if (last && last.role === "assistant") {
+              const newPrev = [...prev];
+              newPrev[newPrev.length - 1] = { ...last, content: assistantMessage };
+              return newPrev;
+            } else {
+              return [...prev, { role: "assistant", content: assistantMessage }];
+            }
+          });
+        } catch (err) {
+          console.error("Failed to parse chunk:", line, err);
+        }
       }
     }
-  }
-};
+  };
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-100 text-gray-900">

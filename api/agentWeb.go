@@ -7,8 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/google/uuid"
 )
 
 func updateMemory(messages *[]ChatMessage, fileName string) {
@@ -67,7 +65,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	]
 	*/
 
-	fileName := "messages.json" // Replace with the name of the file you want to check
+	fileName := "messages.json"
 
 	messages := []ChatMessage{}
 
@@ -96,9 +94,9 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		}
 	}
 
-	randkey := (uuid.New()).String() // generates a random UUID (version 4)
+	// randkey := (uuid.New()).String() // generates a random UUID (version 4)
 
-	randkey = randkey
+	// randkey = randkey
 
 	// Start of conversation loop
 	//for true {
