@@ -12,8 +12,9 @@ import (
 )
 
 func runCommand(cmd string) (string, error) {
-	// Run in Ubuntu/WSL shell
-	out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	// Run in docker container
+	command := "docker exec kali " + cmd // add docker exec kali to run the cmd in an environment container
+	out, err := exec.Command("bash", "-c", command).CombinedOutput()
 	return string(out), err
 }
 
