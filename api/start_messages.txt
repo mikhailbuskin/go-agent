@@ -1,0 +1,45 @@
+You are a professional red-team researcher, penetration tester.
+Your objective: discover likely security weaknesses in scope X using non-destructive techniques, prioritize findings by exploitability/risk, and produce reproducible test hypotheses and remediation suggestions.
+Use reconnaissance first; escalate only with human approval.
+
+To conduct a professi onal red team engagement focused on non-destructive techniques, we would follow a structured methodology. Here’s a general plan and approach to undertake reconnaissance and vulnerability assessment:
+### Step 1: Define Scope and Rules of Engagement
+1. **Identify Scope X**: Clearly outline the target systems, applications, networks, and any constraints on testing methodologies.
+2. **Get Approval**: Ensure that approvals for all testing activities are documented, especially for activities that may escalate beyond reconnaissance.
+### Step 2: Information Gathering (Reconnaissance)
+1. **Passive Reconnaissance**:
+   - **WHOIS Lookup**: Identify the domain registration details, including contact information and DNS servers.
+   - **OSINT**: Utilize open-source intelligence tools to gather information from public sources (e.g., social media, corporate websites, forums) to understand the organizational structure and potential vulnerabilities.
+   - **DNS Enumeration**: Use tools like `dig` or `nslookup` to gather DNS records (A, AAAA, MX, etc.).
+2. **Active Reconnaissance**:
+   - **Port Scanning**: Use tools like `nmap` to discover open ports and services running on the target systems.
+   - **Service Version Detection**: Determine versions of services running on open ports to identify potential vulnerabilities.
+   - **Web Application Mapping**: Use tools like `dirb` or `gobuster` to discover hidden directories and files on web servers.
+### Step 3: Vulnerability Assessment
+1. **Automated Scanning**: Run vulnerability scanners like `OpenVAS` or `Nessus` against the discovered services to identify known weaknesses.
+2. **Manual Testing**: Manually test for vulnerabilities such as:
+   - SQL Injection
+   - Cross-Site Scripting (XSS)
+   - Insecure Direct Object References (IDOR)
+   - Misconfigurations in web servers or databases
+### Step 4: Prioritization of Findings
+1. **Risk Assessment**: Categorize findings based on the CVSS score, potential impact, and ease of exploitation.
+2. **Exploitability Ranking**: Rank vulnerabilities based on how easily they can be exploited (low, medium, high).
+### Step 5: Reporting
+1. **Reproducible Test Hypotheses**: Document each vulnerability with the following:
+   - Description
+   - Steps to reproduce the finding 
+   - Screenshot or evidence, if applicable
+2. **Remediation Suggestions**: Provide actionable recommendations to mitigate each vulnerability, such as:
+   - Apply patches or updates to services
+   - Implement security best practices (e.g., input validation, proper access controls)
+### Step 6: Seek Approval for Escalation (if necessary)
+Before conducting any deeper exploitation or potentially harmful tests, present findings to stakeholders for approval to escalate testing.
+### Example Tools and Commands
+- **Reconnaissance Tools**: `whois`, `dig`, `nmap`, `gobuster`, `theHarvester`
+- **Vulnerability Scanners**: `OpenVAS`, `Nessus`
+- **Command Examples**:
+  - Port Scan: `nmap -sS -sV -p 1-65535 target_ip`
+  - DNS Records: `dig example.com ANY`
+### Conclusion
+This methodology will help identify and prioritize security weaknesses in Scope X without destructive testing. Always ensure that human approval is obtained before escalating engagements.

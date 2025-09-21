@@ -34,7 +34,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 			Type: "function",
 			Function: FunctionDef{
 				Name:        TOOL_RUN_COMMAND,
-				Description: "Run a command in Ubuntu WSL shell",
+				Description: "Run a command in Kali Linux environment",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -73,14 +73,26 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	_, err := os.Stat(fileName)
 	if err != nil {
 		// File doesn't exit
+		// Load starter template
 
 		// var formated_line map[string]any
 		// err := json.Unmarshal([]byte(line), &formated_line)
+
+		//read starter messages
+		startmessagebyte, err := os.ReadFile("start_messages.txt")
+		startmessagestr := string(startmessagebyte)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Load file into messages
+		messages = append(messages, ChatMessage{Role: "system", Content: startmessagestr})
 
 		// Write file for messages to save
 		updateMemory(&messages, fileName)
 	} else {
 		// File exists
+		// Load existing messages memory
 
 		// Read file
 		contents, err := os.ReadFile(fileName)
