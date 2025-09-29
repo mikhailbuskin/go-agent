@@ -71,6 +71,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 	// Check if file exists.
 	_, err := os.Stat(fileName)
+	// === NEW CONVERSATION
 	if err != nil {
 		// File doesn't exit
 		// Load starter template
@@ -86,11 +87,12 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		}
 
 		// Load file into messages
-		messages = append(messages, ChatMessage{Role: "system", Content: startmessagestr})
+		messages = []ChatMessage{{Role: "system", Content: startmessagestr}}
 
 		// Write file for messages to save
 		updateMemory(&messages, fileName)
 	} else {
+		// === CONTINUE CONVERSATION
 		// File exists
 		// Load existing messages memory
 
@@ -117,9 +119,42 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	// 	break
 	// }
 
-	// add user's prompt to message history
-	messages = append(messages, ChatMessage{Role: "user", Content: prompt})
-	updateMemory(&messages, fileName)
+	lastAssisWTools := false
+	//lastIsTool := false
+
+	if prompt != "" {
+		// STARTING CYCLE
+
+		// add user's prompt to message history
+		messages = append(messages, ChatMessage{Role: "user", Content: prompt})
+		updateMemory(&messages, fileName)
+	} else {
+		// CONTINUING UNFINISHED CYCLE
+
+		lastMes := messages[len(messages)-1]
+		// do not add any messages, continue the cycle (if something stopped).
+
+		// if last message is assistant without tools, do nothing
+		if lastMes.Role == "assistant" && len(lastMes.ToolCalls) == 0 {
+			// exit loop because there is nothing to be continued on
+			return // --------------------------------------------------------------------------------------------------------------------------------------------------------------------pay attention to this, need to send back "Nothing to continue"
+		}
+
+		// if last message is assistant with tools, call tools.
+		if lastMes.Role == "assistant" && len(lastMes.ToolCalls) > 0 {
+			// call tool and go from there
+			lastAssisWTools = true
+		}
+		// if last message is tool, send to OpenAI as is
+		//if lastMes.Role == "tool" {
+		// send to messages to OpenAI to review the command output and go from there
+		// so just do the regular as you would do with lastMessage being user, don't need a variable
+
+		//lastIsTool = true
+		//}
+	}
+
+	//Sample Prompts:
 	//Say this is a test
 	//List all files in the current directory using Ubuntu tool
 	//Go back a folder from the current directory and tell me the contents of it
@@ -128,52 +163,52 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 	// START OF TOOL LOOP
 	for {
+		var agentmsg ChatMessage
 
-		// Step 1: Send user message
-		req := ChatRequest{
-			Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
-			Messages: messages,
-			Tools:    tools,
-			Stream:   true,
+		if lastAssisWTools { // When last message is assistant with tools
+			agentmsg = messages[len(messages)-1] // set as the last message
+		} else { // when last message is tool output to send back to the assistant or user
+			// Step 1: Send user message
+			req := ChatRequest{
+				Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
+				Messages: messages,
+				Tools:    tools,
+				Stream:   true,
+			}
+
+			//chatResp, err := callOpenAI(ctx, key, req)
+			chatResp, err := callOpenAIStream(ctx, key, req, w)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			agentmsg = chatResp.Choices[0].Message
+
+			// add assistant message
+			messages = append(messages, agentmsg)
+			updateMemory(&messages, fileName)
 		}
-
-		//chatResp, err := callOpenAI(ctx, key, req)
-		chatResp, err := callOpenAIStream(ctx, key, req, w)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		agentmsg := chatResp.Choices[0].Message
-
-		// add assistant message
-		messages = append(messages, agentmsg)
-		updateMemory(&messages, fileName)
 
 		if len(agentmsg.ToolCalls) > 0 {
 			for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
 				if toolCall.Function.Name == TOOL_RUN_COMMAND {
 
-					// arguments no longer double serialized so no need for this code
-					// get the command
 					var raw string
+
+					// raw = "{\"cmd\": \"nikto -h www.maintstar.com -p 80\"}{\"cmd\": \"nikto -h www.maintstar.com -p 443\"}"
 					err := json.Unmarshal(toolCall.Function.Arguments, &raw)
 					if err != nil {
 						log.Fatal(err)
 					}
 
-					var args struct {
-						Cmd string `json:"cmd"`
-					}
-
-					err = json.Unmarshal([]byte(raw), &args)
+					// breakArgs() Workflow :
+					// {...}{...} => [{...}{...}]
+					// extract command out of {...} execute it and append it to outputs[]. Repeat with the rest of the []
+					// Convert outputs[] into one output : "Command 1 Output: ... \n Command 2 Output: ... \n ..."
+					// return
+					output, err := breakArgs(raw)
 					if err != nil {
 						log.Fatal(err)
-					}
-
-					// run the command
-					output, err := runCommand(args.Cmd)
-					if err != nil {
-						output = fmt.Sprintf("Error: %v", err)
 					}
 
 					tool_id := toolCall.ID
@@ -193,6 +228,9 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 			break
 		}
 
+		lastAssisWTools = false
+		//lastIsTool = false
+
 		i++
 		if i > 10 {
 			err := sendWebMessage("Loop Run Limit Exceeded", w)
@@ -205,4 +243,50 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	}
 	//}
 	// END OF TOOL LOOP
+}
+
+func breakArgs(raw string) (string, error) {
+	var raws []string
+	begin := 0
+	for i := 0; i < (len(raw) - 1); i++ { // Go through indexes 0 to the 2nd to last one
+		if raw[i] == '}' && raw[i+1] == '{' {
+			raws = append(raws, raw[begin:(i+1)])
+			begin = i + 1
+		}
+	}
+	raws = append(raws, raw[begin:])
+
+	var args struct {
+		Cmd string `json:"cmd"`
+	}
+
+	//rawsLength := len(raws)
+	var outputs []string
+
+	for i := range raws {
+		err := json.Unmarshal([]byte(raws[i]), &args)
+		if err != nil {
+			return "", err
+		}
+
+		// run the command
+		tempOut, exitCode, err := runCommand(args.Cmd)
+
+		tempOut += fmt.Sprintf("\nExit Code: %d", exitCode)
+
+		outputs = append(outputs, tempOut)
+
+		if err != nil {
+			// outputs[i] = fmt.Sprintf("Error: %v", err)
+			// break
+			return "", err
+		}
+	}
+
+	var output string
+	for i := range outputs {
+		output += fmt.Sprintf("Command %d Output: %s\n\n", (i + 1), outputs[i])
+	}
+
+	return output, nil
 }

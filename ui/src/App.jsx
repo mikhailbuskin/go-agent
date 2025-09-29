@@ -20,13 +20,18 @@ export default function App() {
   const [input, setInput] = useState("");
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
-
-    // Add user's message
-    setMessages([...messages, { role: "user", content: input }]);
+    var fInput;
+    if (!input.trim()) {
+      // when empty continue existing messages
+      fInput = "";
+    } else {
+      // Add user's message
+      setMessages([...messages, { role: "user", content: input }]);
+      fInput = input;
+    }
     setInput("");
 
-    const data = { message: input };
+    const data = { message: fInput };
     const res = await fetch("http://localhost:8080/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
