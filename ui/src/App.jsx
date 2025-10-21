@@ -43,8 +43,9 @@ export default function App() {
     let assistantMessage = "";
 
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await reader.read(); // This reads the new non read messages only. Skips the ones it has already read.
       if (done) break;
+      //debugger;
 
       // Decode the chunk into a string
       const chunk = decoder.decode(value, { stream: true });
@@ -61,12 +62,21 @@ export default function App() {
           setMessages((prev) => {
             // Replace the last assistant message (or append if none yet)
             const last = prev[prev.length - 1];
-            if (last && last.role === "assistant") {
-              const newPrev = [...prev];
-              newPrev[newPrev.length - 1] = { ...last, content: assistantMessage };
-              return newPrev;
-            } else {
-              return [...prev, { role: "assistant", content: assistantMessage }];
+            if(parsed.role == "assistant") {
+              // When assistantMessage += parsed.content is HERE. It adds it twice for some reason---------------------------------------------------------------------------------------------------review
+              if (last && last.role === "assistant") { // After first time it adds onto that message when streaming
+                const newPrev = [...prev];
+                newPrev[newPrev.length - 1] = { ...last, content: assistantMessage }; // newPrev is the messages with the last message replaced by the updated one
+                return newPrev;
+              } else { // First time it creates a message
+                return [...prev, { role: "assistant", content: assistantMessage }];
+              }
+            } else if (parsed.role == "tool") {
+              assistantMessage = ""; // so the message doesn't just keep adding on.
+              return [...prev, { role: "tool", content: parsed.content }];
+            } else if (parsed.role == "error") {
+              //return [...prev, { role: "tool", content: assistantMessage }]; // needs to show error
+              alert(parsed.content);
             }
           });
         } catch (err) {
@@ -92,12 +102,34 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
             className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-line ${
-              msg.role === "user"
-                ? "ml-auto bg-blue-500 text-white"
-                : "mr-auto bg-white"
+              ( ()=>{
+                if(msg.role === "user") {
+                  return "ml-auto bg-blue-500 text-white"
+                } else if (msg.role === "assistant") {
+                  return "mr-auto bg-white"
+                } else if (msg.role === "tool") {
+                  return "mr-auto bg-gray-300"
+                } else if (msg.role === "system") {
+                  return "ml-auto bg-gray-300"
+                }
+              } )()                                          // () in the end calls the function immediately
             }`}
           >
             {msg.content}
+            {/* Render all tool_calls functions if the array exists */}
+            {
+              "tool_calls" in msg &&            // The way of doing if statements in JSX
+              msg.tool_calls.map((call, index) => (
+                // Add a line break after each function
+                <div>
+                  {"Calling:\n" + JSON.stringify(call.function)}
+                  {index < msg.tool_calls.length - 1 && <br />}
+                </div>
+              ))
+            }
+            {/* {JSON.stringify(msg,2,2)} */}
+            {/* {"tool_calls" in msg ? msg.tool_calls.function : null} */}
+
           </motion.div>
         ))}
       </div>

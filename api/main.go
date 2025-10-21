@@ -19,6 +19,7 @@ type APIChatMemoryResponse struct {
 }
 
 type APIChatResponse struct {
+	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
@@ -44,13 +45,13 @@ func sendMemory(w http.ResponseWriter, r *http.Request) {
 	fileName := "messages.json"
 
 	var messages []ChatMessage
-	var filtered []ChatMessage
+	//var filtered []ChatMessage
 
 	// Check if file exists.
 	_, err := os.Stat(fileName)
 	if err != nil {
 		// File doesn't exit
-		filtered = []ChatMessage{}
+		messages = []ChatMessage{}
 		// Return empty messages
 
 	} else {
@@ -59,21 +60,22 @@ func sendMemory(w http.ResponseWriter, r *http.Request) {
 		// Read file
 		byteMessages, err := os.ReadFile(fileName) // Read File gives you the contents in []byte data type
 		json.Unmarshal(byteMessages, &messages)
+		messages = messages[1:]
 
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		for _, msg := range messages {
-			if msg.Role == "assistant" || msg.Role == "user" {
-				if msg.Content != "" {
-					filtered = append(filtered, msg)
-				}
-			}
-		}
+		// for _, msg := range messages {
+		// 	if msg.Role == "assistant" || msg.Role == "user" {
+		// 		if msg.Content != "" {
+		// 			filtered = append(filtered, msg)
+		// 		}
+		// 	}
+		// }
 	}
 
-	res := APIChatMemoryResponse{Messages: filtered}
+	res := APIChatMemoryResponse{Messages: messages}
 	bytes, err := json.Marshal(res)
 	if err != nil {
 		log.Fatal(err)
@@ -102,14 +104,14 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	// json.NewEncoder(w).Encode(res)
 }
 
-func sendWebMessage(content string, w http.ResponseWriter) error {
+func sendWebMessage(role string, content string, w http.ResponseWriter) error {
 	// res := APIChatResponse{Content: response}
 	// w.Header().Set("Content-Type", "application/json")
 	// w.Header().Set("Cache-Control", "no-cache")
 	// w.Header().Set("Connection", "keep-alive")
 	// json.NewEncoder(w).Encode(res)
 
-	msg := APIChatResponse{Content: content}
+	msg := APIChatResponse{Role: role, Content: content}
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err

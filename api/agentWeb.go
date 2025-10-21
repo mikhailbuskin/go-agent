@@ -152,6 +152,8 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 		//lastIsTool = true
 		//}
+
+		// if last message is user, send to Open AI as is
 	}
 
 	//Sample Prompts:
@@ -192,21 +194,30 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		if len(agentmsg.ToolCalls) > 0 {
 			for _, toolCall := range agentmsg.ToolCalls { //   _ --> index not needed
 				if toolCall.Function.Name == TOOL_RUN_COMMAND {
-
 					var raw string
 
+					// arguments = "\"{\\\"cmd\\\":\\\"pwd\\\"}\"" (in bytes)
 					// raw = "{\"cmd\": \"nikto -h www.maintstar.com -p 80\"}{\"cmd\": \"nikto -h www.maintstar.com -p 443\"}"
-					err := json.Unmarshal(toolCall.Function.Arguments, &raw)
+					err := json.Unmarshal(toolCall.Function.Arguments, &raw) // Undoing the double marshaled arguments
 					if err != nil {
 						log.Fatal(err)
 					}
 
+					//callmsg := fmt.Sprintf("Calling:\nType: %v : %v\nCommand : %v", toolCall.Type, toolCall.Function.Name, raw)
+					call, err := json.Marshal(toolCall.Function) // equivalent to json.stringify(toolCall.Function) in App.jsx's memory loading
+					if err != nil {
+						log.Fatal(err)
+					}
+					callmsg := fmt.Sprintf("Calling:\n%v", string(call))
+					sendWebMessage("assistant", callmsg, w)
+
 					// breakArgs() Workflow :
-					// {...}{...} => [{...}{...}]
+					// "{...}{...}" => [{...},{...}]
 					// extract command out of {...} execute it and append it to outputs[]. Repeat with the rest of the []
 					// Convert outputs[] into one output : "Command 1 Output: ... \n Command 2 Output: ... \n ..."
 					// return
 					output, err := breakArgs(raw)
+					sendWebMessage("tool", output, w)
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -233,7 +244,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 		i++
 		if i > 10 {
-			err := sendWebMessage("Loop Run Limit Exceeded", w)
+			err := sendWebMessage("error", "Loop Run Limit Exceeded", w)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -246,6 +257,8 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 }
 
 func breakArgs(raw string) (string, error) {
+	// raw = "{\"cmd\": \"nikto -h www.maintstar.com -p 80\"}{\"cmd\": \"nikto -h www.maintstar.com -p 443\"}"
+
 	var raws []string
 	begin := 0
 	for i := 0; i < (len(raw) - 1); i++ { // Go through indexes 0 to the 2nd to last one
@@ -255,6 +268,8 @@ func breakArgs(raw string) (string, error) {
 		}
 	}
 	raws = append(raws, raw[begin:])
+
+	// raws = [ {\"cmd\": \"nikto -h www.maintstar.com -p 80\"}, {\"cmd\": \"nikto -h www.maintstar.com -p 443\"} ]
 
 	var args struct {
 		Cmd string `json:"cmd"`
@@ -283,10 +298,17 @@ func breakArgs(raw string) (string, error) {
 		}
 	}
 
+	// outputs = [ "(Output 1) Exit Code: (Exit Code)", "(Output 2) Exit Code: (Exit Code)" ]
+
 	var output string
 	for i := range outputs {
-		output += fmt.Sprintf("Command %d Output: %s\n\n", (i + 1), outputs[i])
+		output += fmt.Sprintf("Command %d Output: \n%s", (i + 1), outputs[i])
+		if i+1 < len(outputs) {
+			output += "\n\n"
+		} // if it is not the last Output then make space
 	}
+
+	// output = "Command 1 Output: ... \n Exit Code: (Exit Code) \n Command 2 Output: ... \n Exit Code: (Exit Code)"
 
 	return output, nil
 }

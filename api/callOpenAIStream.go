@@ -203,7 +203,7 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w
 			if delta.Content != "" {
 				fmt.Print(delta.Content) // prints piece by piece
 				// Send the message
-				err := sendWebMessage(delta.Content, w)
+				err := sendWebMessage("assistant", delta.Content, w)
 				if err != nil {
 					return nil, err
 				}
@@ -215,7 +215,9 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w
 	// chatResp.Choices[0].Message.Role = "assistant"
 	chatResp.Choices[0].Message.Content = content
 
-	farg, err := json.Marshal(argument)
+	// argument = "{\"cmd\":\"pwd\"}"
+	farg, err := json.Marshal(argument) // Stringifying it a second time for it to be readable by the agent
+	// farg = "\"{\\\"cmd\\\":\\\"pwd\\\"}\"" (in bytes)
 	if err != nil {
 		return nil, err
 	}

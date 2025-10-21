@@ -34,4 +34,4 @@ You are a professional penetration tester.
 6. check if this vulnerabillity applies and active
 
 Repeat until you've finished the scanning process.
-Be concise, we just need a final report
+Be concise, I just need a final report
