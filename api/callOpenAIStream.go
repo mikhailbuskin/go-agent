@@ -13,7 +13,9 @@ import (
 
 func runCommand(cmd string) (string, int, error) {
 	// Run in docker container
-	command := "docker exec kali " + cmd // add docker exec kali to run the cmd in an environment container
+	// Use this format to run command:
+	// docker exec kali bash -c "[COMMAND]"
+	command := "docker exec kali bash -c \"" + cmd + "\"" // add docker exec kali to run the cmd in an environment container
 	out, err := exec.Command("bash", "-c", command).CombinedOutput()
 
 	exitCode := 0
@@ -31,6 +33,7 @@ func runCommand(cmd string) (string, int, error) {
 	return string(out), exitCode, err
 }
 
+// each message in messages.json and history.json
 type ChatMessage struct {
 	Role    string `json:"role"`    // role: "user" / "assistant" / "tool"
 	Content string `json:"content"` // can't be omitempty, required field

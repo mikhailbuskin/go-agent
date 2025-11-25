@@ -1,0 +1,42 @@
+[
+ {
+  "role": "user",
+  "content": "Hello!"
+ },
+ {
+  "role": "assistant",
+  "content": "Hello! How can I assist you today?"
+ },
+ {
+  "role": "user",
+  "content": "What is the current directory?"
+ },
+ {
+  "role": "assistant",
+  "content": "Calling:\n{\"name\":\"run_command\",\"arguments\":\"{\\\"cmd\\\":\\\"pwd\\\"}\"}"
+ },
+ {
+  "role": "tool",
+  "content": "Command 1 Output: \n/\n\nExit Code: 0"
+ },
+ {
+  "role": "assistant",
+  "content": "The current directory is `/`."
+ },
+ {
+  "role": "user",
+  "content": "call ls"
+ },
+ {
+  "role": "assistant",
+  "content": "Calling:\n{\"name\":\"run_command\",\"arguments\":\"{\\\"cmd\\\":\\\"ls\\\"}\"}"
+ },
+ {
+  "role": "tool",
+  "content": "Command 1 Output: \napp\nbin\nboot\ncommand\nconfig\ndefaults\nde-pid\ndev\ndocker-mods\netc\nhome\ninit\nlib\nlib64\nlsiopy\nmedia\nmnt\nopt\npackage\nproc\nproot-apps\nroot\nrun\nsbin\nsrv\nsys\ntmp\nusr\nvar\n\nExit Code: 0"
+ },
+ {
+  "role": "assistant",
+  "content": "The contents of the current directory are:\n\n- app\n- bin\n- boot\n- command\n- config\n- defaults\n- de-pid\n- dev\n- docker-mods\n- etc\n- home\n- init\n- lib\n- lib64\n- lsiopy\n- media\n- mnt\n- opt\n- package\n- proc\n- proot-apps\n- root\n- run\n- sbin\n- srv\n- sys\n- tmp\n- usr\n- var"
+ }
+]

@@ -1,0 +1,68 @@
+[
+ {
+  "role": "system",
+  "content": "You are a professional penetration tester.\n\n# You save your process state in this format:\n{\n    \"current_step\": 1,\n    \"servers\": [\"172.17.0.1\"],\n    \"ports\": [\n        \"172.17.0.1:3000\",\n        \"172.17.0.1:8080\"\n    ],\n    \"apps\" : {\n        \"172.17.0.1:3000\" : {\n            \"name\": \"juice shop\",\n            \"version\": \"1.2.3\",\n            \"vulns\": [\n                {\"id\":\"GHSA-vf2r-cxg9-p7rf\", \"notes\": \"...\", \"applies\": \"not-checked\"}\n            ]\n        },\n        \"172.17.0.1:8080\": {\n            \"name\": \"wordpress\",\n            \"version\": \"2.1.0\",\n            \"vulns\": [\n                {\"id\":\"RLSA-2025:7432\", \"notes\": \"...\", \"applies\": \"yes\"}\n            ]\n        }\n    }\n}\n\n# You follow this specific process:\n1. pick server to check and put into .servers\n2. find open ports for the servers and put into .ports\n3. find which apps are running on these ports and their versions and put into .apps\n5. use curl and a osv.dev website to check for platform or apps vulnerabilities and put into .vulns\n6. check if this vulnerabillity applies and active\n\nRepeat until you've finished the scanning process.\nBe concise, I just need a final report"
+ },
+ {
+  "role": "user",
+  "content": "Hello!"
+ },
+ {
+  "role": "assistant",
+  "content": "Hello! How can I assist you today?"
+ },
+ {
+  "role": "user",
+  "content": "What is the current directory?"
+ },
+ {
+  "role": "assistant",
+  "content": "",
+  "tool_calls": [
+   {
+    "id": "call_4vu3a7V1GiGo9eVuFeTRcHNz",
+    "type": "function",
+    "function": {
+     "name": "run_command",
+     "arguments": "{\"cmd\":\"pwd\"}"
+    }
+   }
+  ]
+ },
+ {
+  "role": "tool",
+  "content": "Command 1 Output: \n/\n\nExit Code: 0",
+  "tool_call_id": "call_4vu3a7V1GiGo9eVuFeTRcHNz"
+ },
+ {
+  "role": "assistant",
+  "content": "The current directory is `/`."
+ },
+ {
+  "role": "user",
+  "content": "call ls"
+ },
+ {
+  "role": "assistant",
+  "content": "",
+  "tool_calls": [
+   {
+    "id": "call_33hPbkrZdaIFi2cdr6av3pJV",
+    "type": "function",
+    "function": {
+     "name": "run_command",
+     "arguments": "{\"cmd\":\"ls\"}"
+    }
+   }
+  ]
+ },
+ {
+  "role": "tool",
+  "content": "Command 1 Output: \napp\nbin\nboot\ncommand\nconfig\ndefaults\nde-pid\ndev\ndocker-mods\netc\nhome\ninit\nlib\nlib64\nlsiopy\nmedia\nmnt\nopt\npackage\nproc\nproot-apps\nroot\nrun\nsbin\nsrv\nsys\ntmp\nusr\nvar\n\nExit Code: 0",
+  "tool_call_id": "call_33hPbkrZdaIFi2cdr6av3pJV"
+ },
+ {
+  "role": "assistant",
+  "content": "The contents of the current directory are:\n\n- app\n- bin\n- boot\n- command\n- config\n- defaults\n- de-pid\n- dev\n- docker-mods\n- etc\n- home\n- init\n- lib\n- lib64\n- lsiopy\n- media\n- mnt\n- opt\n- package\n- proc\n- proot-apps\n- root\n- run\n- sbin\n- srv\n- sys\n- tmp\n- usr\n- var"
+ }
+]

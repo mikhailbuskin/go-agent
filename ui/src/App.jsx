@@ -59,7 +59,7 @@ export default function App() {
           assistantMessage += parsed.content;
 
           // Update the UI progressively
-          setMessages((prev) => {
+          setMessages((prev) => { // prev is the current messages
             // Replace the last assistant message (or append if none yet)
             const last = prev[prev.length - 1];
             if(parsed.role == "assistant") {
@@ -116,19 +116,6 @@ export default function App() {
             }`}
           >
             {msg.content}
-            {/* Render all tool_calls functions if the array exists */}
-            {
-              "tool_calls" in msg &&            // The way of doing if statements in JSX
-              msg.tool_calls.map((call, index) => (
-                // Add a line break after each function
-                <div>
-                  {"Calling:\n" + JSON.stringify(call.function)}
-                  {index < msg.tool_calls.length - 1 && <br />}
-                </div>
-              ))
-            }
-            {/* {JSON.stringify(msg,2,2)} */}
-            {/* {"tool_calls" in msg ? msg.tool_calls.function : null} */}
 
           </motion.div>
         ))}

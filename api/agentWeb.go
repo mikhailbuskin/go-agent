@@ -11,7 +11,10 @@ import (
 
 func updateMemory(messages *[]ChatMessage, fileName string) {
 	data, _ := json.MarshalIndent(messages, "", " ") // json.MarshalIndent (and json.Marshal) can take either a value or a pointer to a value/structure. It doesn’t require the value specifically.
-	os.WriteFile(fileName, data, 0644)
+	err := os.WriteFile(fileName, data, 0644)
+	if err != nil {
+		log.Fatalf("Error writing to file: %v", err)
+	}
 }
 
 func agentWeb(prompt string, w http.ResponseWriter) {
@@ -65,16 +68,25 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	]
 	*/
 
-	fileName := "messages.json"
+	folderName := "./chat"
+	fileNameM := folderName + "/messages.json"
+	fileNameH := folderName + "/history.json"
 
 	messages := []ChatMessage{}
+	history := []ChatMessage{}
 
-	// Check if file exists.
-	_, err := os.Stat(fileName)
-	// === NEW CONVERSATION
-	if err != nil {
-		// File doesn't exit
-		// Load starter template
+	// Check if the folder exists
+	_, err := os.Stat(fileNameM)
+
+	if err != nil && !os.IsNotExist(err) { // if err isn't "doesn't exist"
+		// Error checking file
+		log.Fatal(err)
+	}
+
+	// If file doesn't exist -> create it
+	if os.IsNotExist(err) {
+		// File doesn't exist
+		// Start new conversation
 
 		// var formated_line map[string]any
 		// err := json.Unmarshal([]byte(line), &formated_line)
@@ -89,20 +101,39 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		// Load file into messages
 		messages = []ChatMessage{{Role: "system", Content: startmessagestr}}
 
-		// Write file for messages to save
-		updateMemory(&messages, fileName)
+		// Create folder "chat"
+		err = os.Mkdir(folderName, 0755) // 0755 sets permissions
+		if err != nil {
+			fmt.Printf("Error creating directory: %v\n", err)
+			return
+		}
+
+		// Write "messages.json" file inside "chat" folder for messages to save
+		updateMemory(&messages, fileNameM)
+		updateMemory(&history, fileNameH)
 	} else {
 		// === CONTINUE CONVERSATION
-		// File exists
+		// Folder "chat" and File "messages.json" exists
 		// Load existing messages memory
 
 		// Read file
-		contents, err := os.ReadFile(fileName)
+		contentsM, err := os.ReadFile(fileNameM) // contentsM is a JSON string in bytes
 		if err != nil {
 			log.Fatal(err)
 		}
 		// Load file into messages
-		err = json.Unmarshal(contents, &messages)
+		err = json.Unmarshal(contentsM, &messages)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Read file
+		contentsH, err := os.ReadFile(fileNameH) // contentsH is a JSON string in bytes
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Load file into messages
+		err = json.Unmarshal(contentsH, &history)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -127,7 +158,10 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 		// add user's prompt to message history
 		messages = append(messages, ChatMessage{Role: "user", Content: prompt})
-		updateMemory(&messages, fileName)
+		updateMemory(&messages, fileNameM)
+
+		history = append(history, ChatMessage{Role: "user", Content: prompt})
+		updateMemory(&history, fileNameH)
 	} else {
 		// CONTINUING UNFINISHED CYCLE
 
@@ -169,7 +203,8 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 		if lastAssisWTools { // When last message is assistant with tools
 			agentmsg = messages[len(messages)-1] // set as the last message
-		} else { // when last message is tool output to send back to the assistant or user
+			// Will then execute tools
+		} else { // when last message is user or tool output to send back to the assistant (agent)
 			// Step 1: Send user message
 			req := ChatRequest{
 				Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
@@ -188,7 +223,11 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 			// add assistant message
 			messages = append(messages, agentmsg)
-			updateMemory(&messages, fileName)
+			updateMemory(&messages, fileNameM)
+
+			// simplemsg := ChatMessage{Role: agentmsg.Role, Content: agentmsg.Content}
+			// history = append(history, simplemsg)
+			// updateMemory(&messages, fileNameH)
 		}
 
 		if len(agentmsg.ToolCalls) > 0 {
@@ -211,23 +250,35 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 					callmsg := fmt.Sprintf("Calling:\n%v", string(call))
 					sendWebMessage("assistant", callmsg, w)
 
+					history = append(history, ChatMessage{Role: "assistant", Content: callmsg})
+					updateMemory(&history, fileNameH)
+
 					// breakArgs() Workflow :
 					// "{...}{...}" => [{...},{...}]
 					// extract command out of {...} execute it and append it to outputs[]. Repeat with the rest of the []
 					// Convert outputs[] into one output : "Command 1 Output: ... \n Command 2 Output: ... \n ..."
 					// return
 					output, err := breakArgs(raw)
-					sendWebMessage("tool", output, w)
 					if err != nil {
 						log.Fatal(err)
 					}
+
+					sendWebMessage("tool", output, w) // send message to web for display
+
+					history = append(history, ChatMessage{Role: "tool", Content: output}) // add message to history variable
+					updateMemory(&history, fileNameH)                                     // update history.json with new history
 
 					tool_id := toolCall.ID
 
 					messages = append(messages,
 						ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
 					)
-					updateMemory(&messages, fileName)
+					updateMemory(&messages, fileNameM)
+
+					// history = append(history,
+					// 	ChatMessage{Role: "tool", Content: output},
+					// )
+					// updateMemory(&messages, fileNameH)
 				}
 			}
 		} else {
@@ -236,6 +287,12 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 			// if err != nil {
 			// 	log.Fatal(err)
 			// }
+
+			// add final assistant message (without tools) to history
+			simplemsg := ChatMessage{Role: "assistant", Content: agentmsg.Content}
+			history = append(history, simplemsg) // add message to history variable
+			updateMemory(&history, fileNameH)    // update history.json with new history
+
 			break
 		}
 

@@ -42,7 +42,7 @@ func main() {
 }
 
 func sendMemory(w http.ResponseWriter, r *http.Request) {
-	fileName := "messages.json"
+	fileName := "./chat/history.json"
 
 	var messages []ChatMessage
 	//var filtered []ChatMessage
@@ -60,7 +60,6 @@ func sendMemory(w http.ResponseWriter, r *http.Request) {
 		// Read file
 		byteMessages, err := os.ReadFile(fileName) // Read File gives you the contents in []byte data type
 		json.Unmarshal(byteMessages, &messages)
-		messages = messages[1:]
 
 		if err != nil {
 			log.Fatal(err)
@@ -94,7 +93,10 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agentWeb(req.Message, w)
+	agentWeb(req.Message, w) // Refers to sendWebMessage() within it to stream the info.
+
+	// Below code was used previously to print responce all at once:
+
 	// Call your AI agent logic here
 	//aiResponse := "Echo: " + req.Message
 	//aiResponse := responce
@@ -111,7 +113,7 @@ func sendWebMessage(role string, content string, w http.ResponseWriter) error {
 	// w.Header().Set("Connection", "keep-alive")
 	// json.NewEncoder(w).Encode(res)
 
-	msg := APIChatResponse{Role: role, Content: content}
+	msg := APIChatResponse{Role: role, Content: content} // send along with the role so web knows in which color to display it
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err
