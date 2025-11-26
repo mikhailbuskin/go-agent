@@ -93,7 +93,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agentWeb(req.Message, w) // Refers to sendWebMessage() within it to stream the info.
+	agentWeb(req.Message, w) // Calls sendWebMessage() within agentWeb() to stream the info.
 
 	// Below code was used previously to print responce all at once:
 

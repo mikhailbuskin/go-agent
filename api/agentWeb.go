@@ -156,6 +156,14 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	if prompt != "" {
 		// STARTING CYCLE
 
+		lastMes := messages[len(messages)-1]
+		// last message is a user, assistant with tools, or a tool output message -> a continue is needed (user needs to press continue button)
+		// Only acceptable thing to start a loop is for the last message to be an assistant without toolCalls
+		if lastMes.Role == "user" || (lastMes.Role == "assistant" && len(lastMes.ToolCalls) > 0) || lastMes.Role == "tool" { // if there is an unfinished loop sequence (anything except assistant without toolCalls OR system message)
+			sendWebMessage("error", "Continue needed because of an interrupted loop sequence", w)
+			return
+		}
+
 		// add user's prompt to message history
 		messages = append(messages, ChatMessage{Role: "user", Content: prompt})
 		updateMemory(&messages, fileNameM)
@@ -171,6 +179,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		// if last message is assistant without tools, do nothing
 		if lastMes.Role == "assistant" && len(lastMes.ToolCalls) == 0 {
 			// exit loop because there is nothing to be continued on
+			sendWebMessage("error", "Nothing to continue", w)
 			return // --------------------------------------------------------------------------------------------------------------------------------------------------------------------pay attention to this, need to send back "Nothing to continue"
 		}
 

@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
 export default function App() {
-  const [messages, setMessages] = useState([]);
+  let [messages, setMessages] = useState([]);
+  const [isRunning, setIsRunning] = useState(false);
 
+  let continuation = false;
 
   const loadMessages = async () => {
     // retrieve messages memory
@@ -20,15 +22,29 @@ export default function App() {
   const [input, setInput] = useState("");
 
   const sendMessage = async () => {
+    setIsRunning(true);
+
+    // When continue button is clicked, a an empty prompt gets sent and "continuation" var works as a bypass
+
+    // Input.trim() gets rid of any spaces. String == false when "" and == true when contains something
+    // Checks if an empty prompt was simply sent
+    if(!input.trim() && continuation == false) {// if the string is empty and continuation is false
+      setMessages([...messages, { role: "error", content: "Prompt Required" }]);
+      setIsRunning(false);
+      return;
+    }
+
+    // If a prompt was sent OR continuation button was pressed sending a "" prompt
     var fInput;
-    if (!input.trim()) {
-      // when empty continue existing messages
+    if(continuation == true) { // prompt is "" and we are continuing the chat
       fInput = "";
-    } else {
+    } else { // if prompt 
       // Add user's message
-      setMessages([...messages, { role: "user", content: input }]);
+      messages = [...messages, { role: "user", content: input }]; // to overcome the problem of setMessages() not changing the variable you manually do it
+      setMessages(messages); // problem: messages variable not getting updated. And in the rest of the function it uses the old version of messages without the "user" message added. solution: one line above
       fInput = input;
     }
+
     setInput("");
 
     const data = { message: fInput };
@@ -42,10 +58,11 @@ export default function App() {
     const decoder = new TextDecoder();
     let assistantMessage = "";
 
+    let breakCycle = false;
+
     while (true) {
-      const { done, value } = await reader.read(); // This reads the new non read messages only. Skips the ones it has already read.
+      const { done, value } = await reader.read(); // This reads the new non read messages only. Skips the ones it has already read. Waits for new mesages
       if (done) break;
-      //debugger;
 
       // Decode the chunk into a string
       const chunk = decoder.decode(value, { stream: true });
@@ -58,32 +75,46 @@ export default function App() {
           const parsed = JSON.parse(line);
           assistantMessage += parsed.content;
 
-          // Update the UI progressively
-          setMessages((prev) => { // prev is the current messages
+          let changeMessages = (prev) => { // prev is the current messages
             // Replace the last assistant message (or append if none yet)
             const last = prev[prev.length - 1];
             if(parsed.role == "assistant") {
+              //if(continuation==false) { setInput(""); } // only erase the textbox if you sent a message
+
               // When assistantMessage += parsed.content is HERE. It adds it twice for some reason---------------------------------------------------------------------------------------------------review
               if (last && last.role === "assistant") { // After first time it adds onto that message when streaming
                 const newPrev = [...prev];
                 newPrev[newPrev.length - 1] = { ...last, content: assistantMessage }; // newPrev is the messages with the last message replaced by the updated one
-                return newPrev;
+                return newPrev; // returns the new messages[] to setMessages() to change the state and display in ui
               } else { // First time it creates a message
                 return [...prev, { role: "assistant", content: assistantMessage }];
               }
             } else if (parsed.role == "tool") {
+              //if(continuation==false) { setInput(""); } // only erase the textbox if you sent a message
+
               assistantMessage = ""; // so the message doesn't just keep adding on.
               return [...prev, { role: "tool", content: parsed.content }];
             } else if (parsed.role == "error") {
               //return [...prev, { role: "tool", content: assistantMessage }]; // needs to show error
-              alert(parsed.content);
+              breakCycle = true;
+              return [...prev, { role: "error", content: parsed.content}];
             }
-          });
+          }
+
+          // Update the UI progressively
+          messages = changeMessages(messages); // to overcome the problem of setMessages() not changing the variable you manually do it
+          setMessages(messages); // problem: messages variable not getting updated. And in the rest of the function it uses the old version of messages without the "user" message added. solution: one line above
         } catch (err) {
           console.error("Failed to parse chunk:", line, err);
         }
+        if (breakCycle) { break; }
       }
+
+      if (breakCycle) { break; }
     }
+
+    continuation = false;
+    setIsRunning(false);
   };
 
   return (
@@ -111,6 +142,8 @@ export default function App() {
                   return "mr-auto bg-gray-300"
                 } else if (msg.role === "system") {
                   return "ml-auto bg-gray-300"
+                } else if (msg.role === "error") {
+                  return "ml-auto bg-red-600 text-white"
                 }
               } )()                                          // () in the end calls the function immediately
             }`}
@@ -130,10 +163,22 @@ export default function App() {
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           placeholder="Type your message..."
           className="flex-1 p-2 rounded-xl border focus:outline-none focus:ring focus:ring-blue-300"
+          disabled={isRunning}
         />
         <button
+          onClick={() => {
+            continuation = true;
+            sendMessage();
+          }}
+          className={"px-4 py-2 text-white rounded-xl cursor-pointer bg-blue-500 hover:bg-blue-600 transition"}
+          disabled={isRunning}
+        >
+          Continue
+        </button>
+        <button
           onClick={sendMessage}
-          className="px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition"
+          className={"px-4 py-2 text-white rounded-xl " + (!isRunning ? "bg-blue-500 hover:bg-blue-600 transition cursor-pointer" : " bg-blue-300")}
+          disabled={isRunning}
         >
           Send
         </button>

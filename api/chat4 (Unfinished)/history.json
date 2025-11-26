@@ -1,0 +1,14 @@
+[
+ {
+  "role": "user",
+  "content": "call ls"
+ },
+ {
+  "role": "assistant",
+  "content": "Calling:\n{\"name\":\"run_command\",\"arguments\":\"{\\\"cmd\\\":\\\"ls\\\"}\"}"
+ },
+ {
+  "role": "tool",
+  "content": "Command 1 Output: \napp\nbin\nboot\ncommand\nconfig\ndefaults\nde-pid\ndev\ndocker-mods\netc\nhome\ninit\nlib\nlib64\nlsiopy\nmedia\nmisha\nmnt\nopt\npackage\nproc\nproot-apps\nroot\nrun\nsbin\nsrv\nsys\ntmp\nusr\nvar\n\nExit Code: 0"
+ }
+]
