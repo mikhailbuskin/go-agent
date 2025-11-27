@@ -170,7 +170,7 @@ export default function App() {
             continuation = true;
             sendMessage();
           }}
-          className={"px-4 py-2 text-white rounded-xl cursor-pointer bg-blue-500 hover:bg-blue-600 transition"}
+          className={"px-4 py-2 text-white rounded-xl " + (!isRunning ? "bg-blue-500 hover:bg-blue-600 transition cursor-pointer" : " bg-blue-300")}
           disabled={isRunning}
         >
           Continue
