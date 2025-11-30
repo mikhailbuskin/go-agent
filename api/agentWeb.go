@@ -267,12 +267,12 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 					// extract command out of {...} execute it and append it to outputs[]. Repeat with the rest of the []
 					// Convert outputs[] into one output : "Command 1 Output: ... \n Command 2 Output: ... \n ..."
 					// return
-					output, err := breakArgs(raw)
+					output, err := breakArgs(raw, w)
 					if err != nil {
 						log.Fatal(err)
 					}
 
-					sendWebMessage("tool", output, w) // send message to web for display
+					//sendWebMessage("tool", output, w) // send message to web for display
 
 					history = append(history, ChatMessage{Role: "tool", Content: output}) // add message to history variable
 					updateMemory(&history, fileNameH)                                     // update history.json with new history
@@ -322,8 +322,9 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	// END OF TOOL LOOP
 }
 
-func breakArgs(raw string) (string, error) {
+func breakArgs(raw string, w http.ResponseWriter) (string, error) {
 	// raw = "{\"cmd\": \"nikto -h www.maintstar.com -p 80\"}{\"cmd\": \"nikto -h www.maintstar.com -p 443\"}"
+	output := ""
 
 	var raws []string
 	begin := 0
@@ -342,7 +343,7 @@ func breakArgs(raw string) (string, error) {
 	}
 
 	//rawsLength := len(raws)
-	var outputs []string
+	//var outputs []string
 
 	for i := range raws {
 		err := json.Unmarshal([]byte(raws[i]), &args)
@@ -350,29 +351,40 @@ func breakArgs(raw string) (string, error) {
 			return "", err
 		}
 
+		msg := fmt.Sprintf("Command %d Output: \n", i+1)
+		output += msg
+		sendWebMessage("tool", msg, w)
+
 		// run the command
-		tempOut, exitCode, err := runCommand(args.Cmd)
+		tempOut, exitCode, err := runCommand(args.Cmd, w) // Calls sendWebMessage() within it to stream command output by line
 
-		tempOut += fmt.Sprintf("\nExit Code: %d", exitCode)
-
-		outputs = append(outputs, tempOut)
+		output += tempOut
 
 		if err != nil {
 			// outputs[i] = fmt.Sprintf("Error: %v", err)
 			// break
-			return "", err
+			return "", err // ---------------------------stops all the commands because if this one doesn't work then the next ones probably won't. Need to add which command failed
 		}
+
+		exitMsg := fmt.Sprintf("\nCommand %d Exit Code: %d", i+1, exitCode)
+
+		if i < len(raws)-1 { // if it is not the iteration then make space
+			exitMsg += "\n\n"
+		}
+
+		sendWebMessage("tool", exitMsg, w)
+		output += exitMsg
 	}
 
 	// outputs = [ "(Output 1) Exit Code: (Exit Code)", "(Output 2) Exit Code: (Exit Code)" ]
 
-	var output string
-	for i := range outputs {
-		output += fmt.Sprintf("Command %d Output: \n%s", (i + 1), outputs[i])
-		if i+1 < len(outputs) {
-			output += "\n\n"
-		} // if it is not the last Output then make space
-	}
+	// var output string
+	// for i := range outputs {
+	// 	output += fmt.Sprintf("Command %d Output: \n%s", (i + 1), outputs[i])
+	// 	if i < len(outputs)-1 {
+	// 		output += "\n\n"
+	// 	} // if it is not the last Output then make space
+	// }
 
 	// output = "Command 1 Output: ... \n Exit Code: (Exit Code) \n Command 2 Output: ... \n Exit Code: (Exit Code)"
 

@@ -11,7 +11,7 @@ import (
 	"os/exec"
 )
 
-func runCommand(cmd string) (string, int, error) {
+func oldrunCommand(cmd string) (string, int, error) {
 	// Run in docker container
 	// Use this format to run command:
 	// docker exec kali bash -c "[COMMAND]"
@@ -31,6 +31,96 @@ func runCommand(cmd string) (string, int, error) {
 	}
 
 	return string(out), exitCode, err
+}
+
+func runCommand(command string, w http.ResponseWriter) (string, int, error) { // Returns final output, exit error, and error message (nil if no errors)
+	// Run shell command in docker container
+	// Use this format to run cmdStr:
+	// docker exec kali bash -c "[COMMAND]"
+	var fOut bytes.Buffer
+
+	cmdStr := "docker exec kali bash -c \"" + command + "\"" // add docker exec kali to run the cmd in an environment container
+	cmd := exec.Command("bash", "-c", cmdStr)
+
+	// // merge stderr into stdout
+	// cmd.Stderr = cmd.Stdout
+
+	// // single unified pipe
+	// pipe, err := cmd.StdoutPipe()
+	// if err != nil {
+	// 	return "", -1, err
+	// }
+
+	// err = cmd.Start()
+	// if err != nil {
+	// 	return "", -1, err
+	// }
+
+	// // stream unified output
+	// scanner := bufio.NewScanner(pipe)
+	// for scanner.Scan() {
+	// 	out := scanner.Text()
+	// 	fOut += out
+	// 	fmt.Print(out) // -------------------------------Replace with sendMessage() to web
+	// 	//sendWebMessage("tool", out, w)
+	// }
+
+	// err = cmd.Wait()
+
+	// Connect pipes
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", -1, err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", -1, err
+	}
+
+	// Start command before reading pipes
+	if err := cmd.Start(); err != nil {
+		return "", -1, err
+	}
+
+	// Stream stdout
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			fOut.WriteString(line + "\n")
+			fmt.Println(line)
+			sendWebMessage("tool", line+"\n", w)
+		}
+	}()
+
+	// Stream stderr
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			fOut.WriteString(line + "\n")
+			fmt.Println(line)
+			sendWebMessage("tool", line, w)
+		}
+	}()
+
+	// Wait until command finishes
+	err = cmd.Wait()
+
+	exitCode := 0
+	if err != nil {
+		exitErr, ok := err.(*exec.ExitError) // ok is true when the err is an exit error (non fatal) and false when something other than a fatal error
+		if ok {                              // If the err is just an exit error
+			exitCode = exitErr.ExitCode() // retrieving the exit code of the exit error
+			// return output and exit code (no Go 'error' unless it's something else except an exit error)
+			return fOut.String(), exitCode, nil // Don't return it as a fatal error
+		}
+		// failed to start or something else. Not an exit error but another error
+		return fOut.String(), -1, err // Return the err to Fatal()
+	}
+
+	return fOut.String(), exitCode, err // error = nil. exitCode = 0.
 }
 
 // each message in messages.json and history.json

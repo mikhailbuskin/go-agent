@@ -57,6 +57,7 @@ export default function App() {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let assistantMessage = "";
+    let toolMessage = "";
 
     let breakCycle = false;
 
@@ -74,26 +75,33 @@ export default function App() {
         try {
           const parsed = JSON.parse(line);
           assistantMessage += parsed.content;
-
+          toolMessage += parsed.content;
+          //debugger;
           let changeMessages = (prev) => { // prev is the current messages
             // Replace the last assistant message (or append if none yet)
             const last = prev[prev.length - 1];
             if(parsed.role == "assistant") {
               //if(continuation==false) { setInput(""); } // only erase the textbox if you sent a message
-
+              toolMessage = "";
               // When assistantMessage += parsed.content is HERE. It adds it twice for some reason---------------------------------------------------------------------------------------------------review
               if (last && last.role === "assistant") { // After first time it adds onto that message when streaming
                 const newPrev = [...prev];
-                newPrev[newPrev.length - 1] = { ...last, content: assistantMessage }; // newPrev is the messages with the last message replaced by the updated one
+                newPrev[newPrev.length - 1] = { ...last, content: assistantMessage }; // this takes all the attributes of the last msg (so the role and content) but then overrides the content with the updated message
                 return newPrev; // returns the new messages[] to setMessages() to change the state and display in ui
               } else { // First time it creates a message
                 return [...prev, { role: "assistant", content: assistantMessage }];
               }
             } else if (parsed.role == "tool") {
               //if(continuation==false) { setInput(""); } // only erase the textbox if you sent a message
-
               assistantMessage = ""; // so the message doesn't just keep adding on.
-              return [...prev, { role: "tool", content: parsed.content }];
+              //return [...prev, { role: "tool", content: parsed.content }];
+              if (last && last.role === "tool") { // After first time it adds onto that message when streaming
+                const newPrev = [...prev];
+                newPrev[newPrev.length - 1] = { ...last, content: toolMessage }; // this takes all the attributes of the last msg (so the role and content) but then overrides the content with the updated message
+                return newPrev; // returns the new messages[] to setMessages() to change the state and display in ui
+              } else { // First time it creates a message
+                return [...prev, { role: "tool", content: toolMessage }];
+              }
             } else if (parsed.role == "error") {
               //return [...prev, { role: "tool", content: assistantMessage }]; // needs to show error
               breakCycle = true;

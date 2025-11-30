@@ -39,6 +39,13 @@ func main() {
 		mux.HandleFunc("/api/memory", sendMemory)
 		http.ListenAndServe(":8080", enableCORS(mux))
 	}
+
+	// command := "ls -l"
+	// out, exitErr, err := runCommand(command)
+	// fmt.Printf("\n\nOutput: %v\nExit Error: %v\nError: %v", out, exitErr, err)
+
+	// out, exitErr, err := oldrunCommand(command)
+	// fmt.Printf("\n\nOld Output:\nOutput: %v\nExit Error: %v\nError: %v", out, exitErr, err)
 }
 
 func sendMemory(w http.ResponseWriter, r *http.Request) {
