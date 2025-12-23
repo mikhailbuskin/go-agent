@@ -231,7 +231,7 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w
 		if !(len(line) > 6 && line[:6] == "data: ") {
 			errMes += line
 			errCount++
-			if errCount > 10 {
+			if errCount > 100 { // Just for safety. It is usually going to break itself through the if statements above once the error message ends
 				log.Fatal(errMes)
 			}
 			continue
@@ -304,6 +304,9 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w
 		}
 
 		i++
+	}
+	if errCount > 0 {
+		log.Fatal(errMes)
 	}
 	// chatResp.Choices[0].Message.Role = "assistant"
 	chatResp.Choices[0].Message.Content = content

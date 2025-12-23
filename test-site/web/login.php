@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // INSECURE: directly interpolate user input into SQL (vulnerable to SQLi)
     $sql = "SELECT * FROM users WHERE username = '$user' AND password = '$pass'";
+    echo ($sql);
     try {
         $stmt = $db->query($sql);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);

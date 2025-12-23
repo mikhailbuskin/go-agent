@@ -14,6 +14,7 @@ try {
     $db->exec("CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT, author TEXT, comment TEXT);");
 
     // Sample users (passwords stored in plain text intentionally)
+    $db->exec("INSERT INTO users (username, password) VALUES ('admin', 'aaasxfcvzxcv');");
     $db->exec("INSERT INTO users (username, password) VALUES ('alice', 'password123');");
     $db->exec("INSERT INTO users (username, password) VALUES ('bob', 'hunter2');");
 

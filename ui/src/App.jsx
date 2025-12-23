@@ -106,10 +106,15 @@ export default function App() {
               //return [...prev, { role: "tool", content: assistantMessage }]; // needs to show error
               breakCycle = true;
               return [...prev, { role: "error", content: parsed.content}];
-            }
+            } else if (parsed.role == "break") {
+              assistantMessage = "";
+              toolMessage = "";
+              return [...prev, { role:"break", content: ""}]
+            } // ----------------------------------------------------------------------------need to add just else and maybe break just in case.
           }
 
           // Update the UI progressively
+          // if changeMessages() returns nothing then messages gets set to null blanking out the screen
           messages = changeMessages(messages); // to overcome the problem of setMessages() not changing the variable you manually do it
           setMessages(messages); // problem: messages variable not getting updated. And in the rest of the function it uses the old version of messages without the "user" message added. solution: one line above
         } catch (err) {
@@ -134,32 +139,35 @@ export default function App() {
 
       {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((msg, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-line ${
-              ( ()=>{
-                if(msg.role === "user") {
-                  return "ml-auto bg-blue-500 text-white"
-                } else if (msg.role === "assistant") {
-                  return "mr-auto bg-white"
-                } else if (msg.role === "tool") {
-                  return "mr-auto bg-gray-300"
-                } else if (msg.role === "system") {
-                  return "ml-auto bg-gray-300"
-                } else if (msg.role === "error") {
-                  return "ml-auto bg-red-600 text-white"
-                }
-              } )()                                          // () in the end calls the function immediately
-            }`}
-          >
-            {msg.content}
+        {messages.map((msg, i) => {
+          if (msg.role === "break") return null
 
-          </motion.div>
-        ))}
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-line ${
+                ( ()=>{
+                  if(msg.role === "user") {
+                    return "ml-auto bg-blue-500 text-white"
+                  } else if (msg.role === "assistant") {
+                    return "mr-auto bg-white"
+                  } else if (msg.role === "tool") {
+                    return "mr-auto bg-gray-300"
+                  } else if (msg.role === "system") {
+                    return "ml-auto bg-gray-300"
+                  } else if (msg.role === "error") {
+                    return "ml-auto bg-red-600 text-white"
+                  }
+                } )()                                          // () in the end calls the function immediately
+              }`}
+            >
+              {msg.content}
+            </motion.div>
+          )
+        })}
       </div>
 
       {/* Input */}

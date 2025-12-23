@@ -180,7 +180,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		if lastMes.Role == "assistant" && len(lastMes.ToolCalls) == 0 {
 			// exit loop because there is nothing to be continued on
 			sendWebMessage("error", "Nothing to continue", w)
-			return // --------------------------------------------------------------------------------------------------------------------------------------------------------------------pay attention to this, need to send back "Nothing to continue"
+			return
 		}
 
 		// if last message is assistant with tools, call tools.
@@ -223,7 +223,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 			}
 
 			//chatResp, err := callOpenAI(ctx, key, req)
-			chatResp, err := callOpenAIStream(ctx, key, req, w)
+			chatResp, err := callOpenAIStream(ctx, key, req, w) // streams content to website inside of it and returns the final result.
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -234,9 +234,17 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 			messages = append(messages, agentmsg)
 			updateMemory(&messages, fileNameM)
 
-			// simplemsg := ChatMessage{Role: agentmsg.Role, Content: agentmsg.Content}
-			// history = append(history, simplemsg)
-			// updateMemory(&messages, fileNameH)
+			// when assistant with a responce.
+			if agentmsg.Content != "" { // can be an assistant with toolCall AND a responce
+				simplemsg := ChatMessage{Role: "assistant", Content: agentmsg.Content}
+				history = append(history, simplemsg)
+				updateMemory(&history, fileNameH)
+
+				//sendWebMessage("assistant", agentmsg.Content, w) // Does not require sending assistant responce because it was already streamed to the web.
+				if len(agentmsg.ToolCalls) > 0 {
+					sendWebMessage("break", "", w) // makes sure that the two assistant messages are not together (the content and the toolCall). Does not effect history but only streaming.
+				}
+			}
 		}
 
 		if len(agentmsg.ToolCalls) > 0 {
@@ -290,7 +298,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 					// updateMemory(&messages, fileNameH)
 				}
 			}
-		} else {
+		} else { // when the responce is without any toolCalls. Just an "assistant" message -> break the tool loop
 			//fmt.Println(agentmsg.Content)
 			// err := sendWebMessage("---end---", w)
 			// if err != nil {
@@ -298,9 +306,9 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 			// }
 
 			// add final assistant message (without tools) to history
-			simplemsg := ChatMessage{Role: "assistant", Content: agentmsg.Content}
-			history = append(history, simplemsg) // add message to history variable
-			updateMemory(&history, fileNameH)    // update history.json with new history
+			// simplemsg := ChatMessage{Role: "assistant", Content: agentmsg.Content}
+			// history = append(history, simplemsg) // add message to history variable
+			// updateMemory(&history, fileNameH)    // update history.json with new history
 
 			break
 		}
@@ -309,7 +317,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		//lastIsTool = false
 
 		i++
-		if i > 10 {
+		if i > 30 {
 			err := sendWebMessage("error", "Loop Run Limit Exceeded", w)
 			if err != nil {
 				log.Fatal(err)
