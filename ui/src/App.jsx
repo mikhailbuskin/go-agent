@@ -148,7 +148,7 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-line ${
+              className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-wrap ${
                 ( ()=>{
                   if(msg.role === "user") {
                     return "ml-auto bg-blue-500 text-white"

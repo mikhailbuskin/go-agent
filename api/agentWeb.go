@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 func updateMemory(messages *[]ChatMessage, fileName string) {
@@ -233,23 +234,21 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 						log.Fatal(err)
 					}
 
-					//callmsg := fmt.Sprintf("Calling:\nType: %v : %v\nCommand : %v", toolCall.Type, toolCall.Function.Name, raw)
-					call, err := json.Marshal(toolCall.Function) // equivalent to json.stringify(toolCall.Function) in App.jsx's memory loading
-					if err != nil {
-						log.Fatal(err)
-					}
-					callmsg := fmt.Sprintf("Calling:\n%v", string(call))
-					sendWebMessage("assistant", callmsg, w)
+					// call, err := json.Marshal(toolCall.Function) // equivalent to json.stringify(toolCall.Function) in App.jsx's memory loading
+					// if err != nil {
+					// 	log.Fatal(err)
+					// }
+					// callmsg := fmt.Sprintf("Calling:\n%v", string(call))
+					// sendWebMessage("assistant", callmsg, w)
 
-					history = append(history, ChatMessage{Role: "assistant", Content: callmsg})
-					//updateMemory(&history, fileNameH)
+					// history = append(history, ChatMessage{Role: "assistant", Content: callmsg})
 
 					// breakArgs() Workflow :
 					// "{...}{...}" => [{...},{...}]
 					// extract command out of {...} execute it and append it to outputs[]. Repeat with the rest of the []
 					// Convert outputs[] into one output : "Command 1 Output: ... \n Command 2 Output: ... \n ..."
 					// return
-					output, err := breakArgs(raw, w) // streams the command outputs inside of it progressively.
+					output, err := breakArgs(raw, w, &history) // streams the command outputs inside of it progressively.
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -284,7 +283,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	// END OF TOOL LOOP
 }
 
-func breakArgs(raw string, w http.ResponseWriter) (string, error) {
+func breakArgs(raw string, w http.ResponseWriter, history *[]ChatMessage) (string, error) {
 	// raw = "{\"cmd\": \"nikto -h www.maintstar.com -p 80\"}{\"cmd\": \"nikto -h www.maintstar.com -p 443\"}"
 	output := ""
 
@@ -298,7 +297,12 @@ func breakArgs(raw string, w http.ResponseWriter) (string, error) {
 	}
 	raws = append(raws, raw[begin:])
 
-	// raws = [ {\"cmd\": \"nikto -h www.maintstar.com -p 80\"}, {\"cmd\": \"nikto -h www.maintstar.com -p 443\"} ]
+	// raws = [ '{"cmd": "nikto -h www.maintstar.com -p 80"}', '{"cmd": "nikto -h www.maintstar.com -p 443"}' ]
+
+	callmsg := "Calling:\n  " + strings.Join(raws, "\n  ")
+
+	sendWebMessage("assistant", callmsg, w)
+	*history = append(*history, ChatMessage{Role: "assistant", Content: callmsg})
 
 	var args struct {
 		Cmd string `json:"cmd"`
