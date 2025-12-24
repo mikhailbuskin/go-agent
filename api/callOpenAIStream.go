@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os/exec"
+	"sync"
 )
 
 func oldrunCommand(cmd string) (string, int, error) {
@@ -38,34 +40,10 @@ func runCommand(command string, w http.ResponseWriter) (string, int, error) { //
 	// Use this format to run cmdStr:
 	// docker exec kali bash -c "[COMMAND]"
 	var fOut bytes.Buffer
+	var wg sync.WaitGroup
 
 	cmdStr := "docker exec kali bash -c \"" + command + "\"" // add docker exec kali to run the cmd in an environment container
 	cmd := exec.Command("bash", "-c", cmdStr)
-
-	// // merge stderr into stdout
-	// cmd.Stderr = cmd.Stdout
-
-	// // single unified pipe
-	// pipe, err := cmd.StdoutPipe()
-	// if err != nil {
-	// 	return "", -1, err
-	// }
-
-	// err = cmd.Start()
-	// if err != nil {
-	// 	return "", -1, err
-	// }
-
-	// // stream unified output
-	// scanner := bufio.NewScanner(pipe)
-	// for scanner.Scan() {
-	// 	out := scanner.Text()
-	// 	fOut += out
-	// 	fmt.Print(out) // -------------------------------Replace with sendMessage() to web
-	// 	//sendWebMessage("tool", out, w)
-	// }
-
-	// err = cmd.Wait()
 
 	// Connect pipes
 	stdout, err := cmd.StdoutPipe()
@@ -83,30 +61,56 @@ func runCommand(command string, w http.ResponseWriter) (string, int, error) { //
 		return "", -1, err
 	}
 
-	// Stream stdout
+	wg.Add(2)
+
+	// ---- Stream STDOUT ----
 	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fOut.WriteString(line + "\n")
-			fmt.Println(line)
-			sendWebMessage("tool", line+"\n", w)
+		defer wg.Done()
+		reader := bufio.NewReader(stdout)
+
+		for {
+			line, err := reader.ReadString('\n')
+			if len(line) > 0 {
+				fOut.WriteString(line)
+				fmt.Print(line)
+				sendWebMessage("tool", line, w)
+			}
+			if err != nil {
+				if err != io.EOF {
+					fmt.Println("stdout error:", err)
+					sendWebMessage("tool", line, w)
+				}
+				break
+			}
 		}
 	}()
 
-	// Stream stderr
+	// ---- Stream STDERR ----
 	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fOut.WriteString(line + "\n")
-			fmt.Println(line)
-			sendWebMessage("tool", line, w)
+		defer wg.Done()
+		reader := bufio.NewReader(stderr)
+
+		for {
+			line, err := reader.ReadString('\n')
+			if len(line) > 0 {
+				fOut.WriteString(line)
+				fmt.Print(line)
+				sendWebMessage("tool", line, w)
+			}
+			if err != nil {
+				if err != io.EOF {
+					fmt.Println("stderr error:", err)
+				}
+				break
+			}
 		}
 	}()
 
 	// Wait until command finishes
 	err = cmd.Wait()
+
+	// Wait for pipe readers to finish
+	wg.Wait()
 
 	exitCode := 0
 	if err != nil {

@@ -19,14 +19,6 @@ func updateMemory(messages *[]ChatMessage, fileName string) {
 
 func agentWeb(prompt string, w http.ResponseWriter) {
 
-	// testing command
-	// out, err := runCommand("ls -la")
-	// if err != nil {
-	// 	log.Fatal(err.Error())
-	// }
-	// fmt.Print(out)
-	// return
-
 	key := os.Getenv("OPENAI_API_KEY")
 
 	ctx := context.TODO()
@@ -88,9 +80,6 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		// File doesn't exist
 		// Start new conversation
 
-		// var formated_line map[string]any
-		// err := json.Unmarshal([]byte(line), &formated_line)
-
 		//read starter messages
 		startmessagebyte, err := os.ReadFile("start_messages.txt")
 		startmessagestr := string(startmessagebyte)
@@ -139,20 +128,9 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		}
 	}
 
-	// randkey := (uuid.New()).String() // generates a random UUID (version 4)
-
-	// randkey = randkey
-
-	// Start of conversation loop
-	//for true {
-
-	// if prompt == "end" {
-	// 	break
-	// }
-
 	lastAssisWTools := false
-	//lastIsTool := false
 
+	// Checking if user pressed "continue" or "send" button
 	if prompt != "" {
 		// STARTING CYCLE
 
@@ -164,12 +142,14 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 			return
 		}
 
+		// trim history.json in case program has stopped in between the update memories---------------if a lot of customer, make sure this isn't a problem
 		// add user's prompt to message history
+		history = append(history, ChatMessage{Role: "user", Content: prompt})
 		messages = append(messages, ChatMessage{Role: "user", Content: prompt})
+
+		updateMemory(&history, fileNameH)
 		updateMemory(&messages, fileNameM)
 
-		history = append(history, ChatMessage{Role: "user", Content: prompt})
-		updateMemory(&history, fileNameH)
 	} else {
 		// CONTINUING UNFINISHED CYCLE
 
@@ -188,13 +168,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 			// call tool and go from there
 			lastAssisWTools = true
 		}
-		// if last message is tool, send to OpenAI as is
-		//if lastMes.Role == "tool" {
-		// send to messages to OpenAI to review the command output and go from there
-		// so just do the regular as you would do with lastMessage being user, don't need a variable
-
-		//lastIsTool = true
-		//}
+		// if last message is tool, send to OpenAI as is (it does the same thing in the regular cycle. If received toolCall -> call command -> return back to agent)
 
 		// if last message is user, send to Open AI as is
 	}
@@ -232,19 +206,19 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 
 			// add assistant message
 			messages = append(messages, agentmsg)
-			updateMemory(&messages, fileNameM)
-
-			// when assistant with a responce.
-			if agentmsg.Content != "" { // can be an assistant with toolCall AND a responce
-				simplemsg := ChatMessage{Role: "assistant", Content: agentmsg.Content}
-				history = append(history, simplemsg)
-				updateMemory(&history, fileNameH)
-
-				//sendWebMessage("assistant", agentmsg.Content, w) // Does not require sending assistant responce because it was already streamed to the web.
+			// when assistant with a response.
+			if agentmsg.Content != "" { // can be an assistant with toolCall AND a response
 				if len(agentmsg.ToolCalls) > 0 {
 					sendWebMessage("break", "", w) // makes sure that the two assistant messages are not together (the content and the toolCall). Does not effect history but only streaming.
 				}
+
+				simplemsg := ChatMessage{Role: "assistant", Content: agentmsg.Content}
+				history = append(history, simplemsg)
 			}
+
+			// update together so they don't go out of sync
+			updateMemory(&history, fileNameH) // will only do something if there is content
+			updateMemory(&messages, fileNameM)
 		}
 
 		if len(agentmsg.ToolCalls) > 0 {
@@ -268,53 +242,34 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 					sendWebMessage("assistant", callmsg, w)
 
 					history = append(history, ChatMessage{Role: "assistant", Content: callmsg})
-					updateMemory(&history, fileNameH)
+					//updateMemory(&history, fileNameH)
 
 					// breakArgs() Workflow :
 					// "{...}{...}" => [{...},{...}]
 					// extract command out of {...} execute it and append it to outputs[]. Repeat with the rest of the []
 					// Convert outputs[] into one output : "Command 1 Output: ... \n Command 2 Output: ... \n ..."
 					// return
-					output, err := breakArgs(raw, w)
+					output, err := breakArgs(raw, w) // streams the command outputs inside of it progressively.
 					if err != nil {
 						log.Fatal(err)
 					}
 
-					//sendWebMessage("tool", output, w) // send message to web for display
-
-					history = append(history, ChatMessage{Role: "tool", Content: output}) // add message to history variable
-					updateMemory(&history, fileNameH)                                     // update history.json with new history
-
 					tool_id := toolCall.ID
 
+					history = append(history, ChatMessage{Role: "tool", Content: output}) // add message to history variable
 					messages = append(messages,
 						ChatMessage{Role: "tool", Content: output, ToolCallID: tool_id},
 					)
-					updateMemory(&messages, fileNameM)
 
-					// history = append(history,
-					// 	ChatMessage{Role: "tool", Content: output},
-					// )
-					// updateMemory(&messages, fileNameH)
+					updateMemory(&history, fileNameH) // update history.json with new history
+					updateMemory(&messages, fileNameM)
 				}
 			}
-		} else { // when the responce is without any toolCalls. Just an "assistant" message -> break the tool loop
-			//fmt.Println(agentmsg.Content)
-			// err := sendWebMessage("---end---", w)
-			// if err != nil {
-			// 	log.Fatal(err)
-			// }
-
-			// add final assistant message (without tools) to history
-			// simplemsg := ChatMessage{Role: "assistant", Content: agentmsg.Content}
-			// history = append(history, simplemsg) // add message to history variable
-			// updateMemory(&history, fileNameH)    // update history.json with new history
-
+		} else { // when the response is without any toolCalls. Just an "assistant" message -> break the tool loop
 			break
 		}
 
 		lastAssisWTools = false
-		//lastIsTool = false
 
 		i++
 		if i > 30 {
@@ -326,7 +281,6 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 		}
 
 	}
-	//}
 	// END OF TOOL LOOP
 }
 
@@ -383,16 +337,6 @@ func breakArgs(raw string, w http.ResponseWriter) (string, error) {
 		sendWebMessage("tool", exitMsg, w)
 		output += exitMsg
 	}
-
-	// outputs = [ "(Output 1) Exit Code: (Exit Code)", "(Output 2) Exit Code: (Exit Code)" ]
-
-	// var output string
-	// for i := range outputs {
-	// 	output += fmt.Sprintf("Command %d Output: \n%s", (i + 1), outputs[i])
-	// 	if i < len(outputs)-1 {
-	// 		output += "\n\n"
-	// 	} // if it is not the last Output then make space
-	// }
 
 	// output = "Command 1 Output: ... \n Exit Code: (Exit Code) \n Command 2 Output: ... \n Exit Code: (Exit Code)"
 

@@ -69,11 +69,11 @@ export default function App() {
       const chunk = decoder.decode(value, { stream: true });
 
       // Split by newlines (each line is a separate JSON object)
-      const lines = chunk.split("\n").filter(Boolean);
+      const lines = chunk.split("\n\n").filter(Boolean);
 
       for (const line of lines) {
         try {
-          const parsed = JSON.parse(line);
+          const parsed = JSON.parse(line.slice(6)); // Get rid of "data: " in the beginning
           assistantMessage += parsed.content;
           toolMessage += parsed.content;
           //debugger;

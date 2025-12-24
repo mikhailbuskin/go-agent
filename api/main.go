@@ -114,11 +114,9 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func sendWebMessage(role string, content string, w http.ResponseWriter) error {
-	// res := APIChatResponse{Content: response}
-	// w.Header().Set("Content-Type", "application/json")
-	// w.Header().Set("Cache-Control", "no-cache")
-	// w.Header().Set("Connection", "keep-alive")
-	// json.NewEncoder(w).Encode(res)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
 
 	msg := APIChatResponse{Role: role, Content: content} // send along with the role so web knows in which color to display it
 	data, err := json.Marshal(msg)
@@ -127,7 +125,10 @@ func sendWebMessage(role string, content string, w http.ResponseWriter) error {
 	}
 
 	// Write JSON + newline
-	if _, err := w.Write(append(data, '\n')); err != nil {
+	// if _, err := w.Write(append(data, '\n')); err != nil {
+	// 	return err
+	// }
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
 		return err
 	}
 
