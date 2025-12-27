@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os/exec"
@@ -35,12 +35,13 @@ func oldrunCommand(cmd string) (string, int, error) {
 	return string(out), exitCode, err
 }
 
-func runCommand(command string, w http.ResponseWriter) (string, int, error) { // Returns final output, exit error, and error message (nil if no errors)
+func runCommand(command string, w http.ResponseWriter, cmdnum int) (string, int, error) { // Returns final output, exit error, and error message (nil if no errors)
 	// Run shell command in docker container
 	// Use this format to run cmdStr:
 	// docker exec kali bash -c "[COMMAND]"
-	var fOut bytes.Buffer
+	//var fOut bytes.Buffer
 	var wg sync.WaitGroup
+	fOut := ""
 
 	cmdStr := "docker exec kali bash -c \"" + command + "\"" // add docker exec kali to run the cmd in an environment container
 	cmd := exec.Command("bash", "-c", cmdStr)
@@ -66,72 +67,96 @@ func runCommand(command string, w http.ResponseWriter) (string, int, error) { //
 	// ---- Stream STDOUT ----
 	go func() {
 		defer wg.Done()
-		reader := bufio.NewReader(stdout)
-
-		for {
-			line, err := reader.ReadString('\n')
-			if len(line) > 0 {
-				fOut.WriteString(line)
-				fmt.Print(line)
-				sendWebMessage("tool", line, w)
-			}
-			if err != nil {
-				if err != io.EOF {
-					fmt.Println("stdout error:", err)
-					sendWebMessage("tool", line, w)
-				}
-				break
-			}
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			text := scanner.Text() + "\n"
+			fmt.Print(text)
+			sendWebMessage("tool", text, w)
+			fOut += text
 		}
+
+		// reader := bufio.NewReader(stdout)
+
+		// for {
+		// 	line, err := reader.ReadString('\n')
+		// 	if len(line) > 0 {
+		// 		fOut.WriteString(line)
+		// 		fmt.Print(line)
+		// 		sendWebMessage("tool", line, w)
+		// 	}
+		// 	if err != nil { // if there is an error
+		// 		if err != io.EOF { // if the error isn't "end of file" error
+		// 			msg := "\nstdout error:" + err.Error()
+		// 			fmt.Println(msg)
+		// 			sendWebMessage("tool", msg, w)
+		// 		}
+		// 		break
+		// 	}
+		// }
 	}()
 
 	// ---- Stream STDERR ----
+	errtext := ""
 	go func() {
 		defer wg.Done()
-		reader := bufio.NewReader(stderr)
-
-		for {
-			line, err := reader.ReadString('\n')
-			if len(line) > 0 {
-				fOut.WriteString(line)
-				fmt.Print(line)
-				sendWebMessage("tool", line, w)
-			}
-			if err != nil {
-				if err != io.EOF {
-					fmt.Println("stderr error:", err)
-				}
-				break
-			}
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			text := scanner.Text() + "\n"
+			errtext += text
+			//fmt.Printf("Stderr: %s\n", text)
+			//sendWebMessage("tool", text, w)
 		}
-	}()
 
-	// Wait until command finishes
-	err = cmd.Wait()
+		// reader := bufio.NewReader(stderr)
+
+		// for {
+		// 	line, err := reader.ReadString('\n')
+		// 	if len(line) > 0 {
+		// 		fOut.WriteString(line)
+		// 		fmt.Print(line)
+		// 		sendWebMessage("tool", line, w)
+		// 	}
+		// 	if err != nil {
+		// 		if err != io.EOF {
+		// 			msg := "\nstderr error:" + err.Error()
+		// 			fmt.Println(msg)
+		// 			sendWebMessage("tool", msg, w)
+		// 		}
+		// 		break
+		// 	}
+		// }
+	}()
 
 	// Wait for pipe readers to finish
 	wg.Wait()
 
+	// Wait until command finishes
+	err = cmd.Wait()
+
 	exitCode := 0
 	if err != nil {
+		if len(errtext) > 0 {
+			errmess := fmt.Sprintf("\nCommand %d Error:\n", cmdnum) + errtext
+			fOut += errmess
+			sendWebMessage("tool", errmess, w)
+		}
 		exitErr, ok := err.(*exec.ExitError) // ok is true when the err is an exit error (non fatal) and false when something other than a fatal error
 		if ok {                              // If the err is just an exit error
 			exitCode = exitErr.ExitCode() // retrieving the exit code of the exit error
 			// return output and exit code (no Go 'error' unless it's something else except an exit error)
-			return fOut.String(), exitCode, nil // Don't return it as a fatal error
+			return fOut, exitCode, nil // Don't return it as a fatal error
 		}
 		// failed to start or something else. Not an exit error but another error
-		return fOut.String(), -1, err // Return the err to Fatal()
+		return fOut, -1, err // Return the err to Fatal()
 	}
 
-	return fOut.String(), exitCode, err // error = nil. exitCode = 0.
+	return fOut, exitCode, err // error = nil. exitCode = 0.
 }
 
 // each message in messages.json and history.json
 type ChatMessage struct {
-	Role    string `json:"role"`    // role: "user" / "assistant" / "tool"
-	Content string `json:"content"` // can't be omitempty, required field
-	//ToolCall   *ToolCall  `json:"tool_call,omitempty"`
+	Role       string     `json:"role"`                   // role: "user" / "assistant" / "tool"
+	Content    string     `json:"content"`                // can't be omitempty, required field
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // this field is only needed and used when role:"assistant"
 	ToolCallID string     `json:"tool_call_id,omitempty"` // this field is only needed and used when role:"tool"
 }
@@ -174,9 +199,18 @@ type ChatResponse struct {
 	Choices []Choice `json:"choices"`
 }
 
+type ChoiceNoStream struct {
+	Message ChatMessage `json:"message"`
+	//Message ChatMessage `json:"delta"`
+}
+
+type ChatResponseNoStream struct {
+	Choices []ChoiceNoStream `json:"choices"`
+}
+
 const TOOL_RUN_COMMAND = "run_command"
 
-func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w http.ResponseWriter) (*ChatResponse, error) { //With streaming there is no ChatResponce being returned at once
+func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w http.ResponseWriter, role string) (*ChatResponse, error) { //With streaming there is no ChatResponce being returned at once
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, err
@@ -300,7 +334,7 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w
 			if delta.Content != "" {
 				fmt.Print(delta.Content) // prints piece by piece
 				// Send the message
-				err := sendWebMessage("assistant", delta.Content, w)
+				err := sendWebMessage(role, delta.Content, w)
 				if err != nil {
 					return nil, err
 				}
@@ -342,6 +376,38 @@ func callOpenAIStream(ctx context.Context, apiKey string, reqBody ChatRequest, w
 		// fmt.Print("\n--- stream done ---")
 		// color.Set(color.FgWhite)
 		fmt.Println()
+	}
+	return &chatResp, nil
+}
+
+func callOpenAI(ctx context.Context, apiKey string, reqBody ChatRequest) (*ChatResponseNoStream, error) {
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, _ := ioutil.ReadAll(resp.Body)
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("API error: %s", data)
+	}
+
+	var chatResp ChatResponseNoStream
+	if err := json.Unmarshal(data, &chatResp); err != nil {
+		return nil, err
 	}
 	return &chatResp, nil
 }

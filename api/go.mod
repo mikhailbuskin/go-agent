@@ -3,8 +3,10 @@ module github.com/mikhailbuskin/go-agent
 go 1.25.0
 
 require (
+	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/pkoukk/tiktoken-go v0.1.8 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 )
 

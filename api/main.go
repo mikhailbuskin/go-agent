@@ -29,6 +29,86 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
+	// Summarization test
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+	// // 1. deser existing messages log
+	// // combine with summarization system message + messages + message("summarize please")
+	// // call api, check results.
+
+	// fileNameM := "./chat7 (test2)/messages.json"
+
+	// //read starter messages
+	// //startmessagebyte, err := os.ReadFile("summarization_system_message.txt")
+	// // startmessagebyte, err := os.ReadFile("system_message.txt")
+	// // startmessagestr := string(startmessagebyte)
+	// // if err != nil {
+	// // 	log.Fatal(err)
+	// // }
+
+	// //messages := []ChatMessage{{Role: "system", Content: startmessagestr}}
+
+	// // Read file
+	// contentsM, err := os.ReadFile(fileNameM) // contentsM is a JSON string in bytes
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// messages := []ChatMessage{}
+	// // Load file into messages
+	// err = json.Unmarshal(contentsM, &messages)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// //messages = append(messages, temp...)
+	// messages = append(messages, ChatMessage{Role: "user", Content: "Please summarize all messages before but keep the progress and all the findings so we continue later"})
+
+	// //--------------------------------------------------------------------------------
+
+	// key := os.Getenv("OPENAI_API_KEY")
+	// ctx := context.TODO()
+
+	// // Tool definition
+	// tools := []ToolDef{
+	// 	{
+	// 		Type: "function",
+	// 		Function: FunctionDef{
+	// 			Name:        TOOL_RUN_COMMAND,
+	// 			Description: "Run a command in Kali Linux environment",
+	// 			Parameters: map[string]interface{}{
+	// 				"type": "object",
+	// 				"properties": map[string]interface{}{
+	// 					"cmd": map[string]string{
+	// 						"type": "string",
+	// 					},
+	// 				},
+	// 				"required": []string{"cmd"},
+	// 			},
+	// 		},
+	// 	},
+	// }
+
+	// req := ChatRequest{
+	// 	Model:    "gpt-4o-mini", // same as openai.ChatModelGPT4oMini
+	// 	Messages: messages,
+	// 	Tools:    tools,
+	// 	Stream:   false,
+	// }
+
+	// chatResp, err := callOpenAI(ctx, key, req)
+
+	// fmt.Println(chatResp.Choices[0].Message.Content)
+
+	// data, _ := json.MarshalIndent(chatResp, "", " ") // json.MarshalIndent (and json.Marshal) can take either a value or a pointer to a value/structure. It doesn’t require the value specifically.
+	// err = os.WriteFile("summarization_output", data, 0644)
+	// if err != nil {
+	// 	log.Fatalf("Error writing to file: %v", err)
+	// }
+
+	// return
+
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 	// args is what you put after the run command. So in "go run . cli something" the argument[1] would be "cli" and argument[2] would be "something"
 	if len(os.Args) > 1 && os.Args[1] == "cli" {
 		//agentConsole()
@@ -39,13 +119,6 @@ func main() {
 		mux.HandleFunc("/api/memory", sendMemory)
 		http.ListenAndServe(":8080", enableCORS(mux))
 	}
-
-	// command := "ls -l"
-	// out, exitErr, err := runCommand(command)
-	// fmt.Printf("\n\nOutput: %v\nExit Error: %v\nError: %v", out, exitErr, err)
-
-	// out, exitErr, err := oldrunCommand(command)
-	// fmt.Printf("\n\nOld Output:\nOutput: %v\nExit Error: %v\nError: %v", out, exitErr, err)
 }
 
 func sendMemory(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +173,10 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
 	agentWeb(req.Message, w) // Calls sendWebMessage() within agentWeb() to stream the info.
 
 	// Below code was used previously to print responce all at once:
@@ -114,10 +191,6 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func sendWebMessage(role string, content string, w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
 	msg := APIChatResponse{Role: role, Content: content} // send along with the role so web knows in which color to display it
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -128,7 +201,7 @@ func sendWebMessage(role string, content string, w http.ResponseWriter) error {
 	// if _, err := w.Write(append(data, '\n')); err != nil {
 	// 	return err
 	// }
-	if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+	if _, err := fmt.Fprintf(w, "data: %s\n", data); err != nil {
 		return err
 	}
 

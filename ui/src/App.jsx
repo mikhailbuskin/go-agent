@@ -69,7 +69,7 @@ export default function App() {
       const chunk = decoder.decode(value, { stream: true });
 
       // Split by newlines (each line is a separate JSON object)
-      const lines = chunk.split("\n\n").filter(Boolean);
+      const lines = chunk.split("\n").filter(Boolean);
 
       for (const line of lines) {
         try {
@@ -145,18 +145,23 @@ export default function App() {
           return (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: (msg.role === "tool" && (i != (messages.length-1)) && (messages[i+1].content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") ? 0.5 : 1, y: 0 }}
               transition={{ duration: 0.2 }}
+              // style={{ opacity: (msg.role === "tool" && (i != (messages.length-1)) && (messages[i+1].content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") ? 0.1 : 1 }}
               className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-wrap ${
                 ( ()=>{
                   if(msg.role === "user") {
                     return "ml-auto bg-blue-500 text-white"
                   } else if (msg.role === "assistant") {
                     return "mr-auto bg-white"
+                  } /*else if (msg.role === "tool" && (msg.content).length >= 37 && (msg.content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") {
+                    return "mr-auto bg-gray-300"
+                  }*/ else if (msg.role === "tool" && (i != (messages.length-1)) && (messages[i+1].content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") { // if this msg isn't the last one in messages and the next one is summarized tool message
+                    return "mr-auto bg-gray-300"
                   } else if (msg.role === "tool") {
                     return "mr-auto bg-gray-300"
-                  } else if (msg.role === "system") {
+                  }  else if (msg.role === "system") {
                     return "ml-auto bg-gray-300"
                   } else if (msg.role === "error") {
                     return "ml-auto bg-red-600 text-white"
@@ -177,7 +182,7 @@ export default function App() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Type your message..."
+          placeholder="Enter prompt..."
           className="flex-1 p-2 rounded-xl border focus:outline-none focus:ring focus:ring-blue-300"
           disabled={isRunning}
         />
