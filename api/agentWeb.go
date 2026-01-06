@@ -68,7 +68,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 	]
 	*/
 
-	folderName := "./chat"
+	folderName := "./chats/chat"
 	fileNameM := folderName + "/messages.json"
 	fileNameH := folderName + "/history.json"
 
@@ -269,7 +269,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 					} else {
 						nosummsg := "No summarization needed. Under 700 tokens"
 						sendWebMessage("tool", nosummsg, w)
-						history = append(history, ChatMessage{Role: "tool", Content: nosummsg}) // add summarized cmd output to history
+						history = append(history, ChatMessage{Role: "tool", Content: nosummsg}) // add unsummarized cmd output to history
 					}
 					//shortenedOut = "   ***Summarized ToolCall Output***\n\n" + shortenedOut
 
@@ -384,8 +384,6 @@ func summarizeOut(output string, toolCall ToolCall, w http.ResponseWriter) strin
 	// Tool message (command output)
 	// User message "Summarize above cmd output keeping everything that may be useful based on the intent"
 
-	//fileNameM := "./chat7 (test2)/messages.json"
-
 	//read system message
 	systemmessagebyte, err := os.ReadFile("system_message.txt")
 	systemmessage := string(systemmessagebyte)
@@ -433,13 +431,34 @@ func summarizeOut(output string, toolCall ToolCall, w http.ResponseWriter) strin
 	chatResp, err := callOpenAIStream(ctx, key, req, w, "tool")
 	shortenedOut += chatResp.Choices[0].Message.Content
 
-	return shortenedOut
+	smessages = append(smessages, ChatMessage{Role: "assistant", Content: shortenedOut})
 
-	// data, _ := json.MarshalIndent(chatResp, "", " ") // json.MarshalIndent (and json.Marshal) can take either a value or a pointer to a value/structure. It doesn’t require the value specifically.
-	// err = os.WriteFile("summarization_output", data, 0644)
-	// if err != nil {
-	// 	log.Fatalf("Error writing to file: %v", err)
-	// }
+	number := 0
+
+	fileName := "./chats/chat/smessages.json"
+
+	for true {
+		if number != 0 {
+			fileName = fmt.Sprintf("./chats/chat/smessages%v.json", number)
+		}
+		// Check if the folder exists
+		_, err := os.Stat(fileName)
+
+		if err != nil && !os.IsNotExist(err) { // if err isn't "doesn't exist"
+			// Error checking file
+			log.Fatal(err)
+		}
+
+		// If file doesn't exist -> create it
+		if os.IsNotExist(err) {
+			// File doesn't exist
+			updateMemory(&smessages, fileName)
+			break
+		}
+		number++
+	}
+
+	return shortenedOut
 }
 
 func countTokens(message string) int {

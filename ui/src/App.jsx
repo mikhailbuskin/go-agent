@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
 export default function App() {
@@ -6,6 +6,16 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
 
   let continuation = false;
+
+  const endOfMessagesRef = useRef(null);
+
+  const scrollToBottom = () => {
+    endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]); // Dependency array: scroll when 'messages' array changes
 
   const loadMessages = async () => {
     // retrieve messages memory
@@ -65,6 +75,9 @@ export default function App() {
       const { done, value } = await reader.read(); // This reads the new non read messages only. Skips the ones it has already read. Waits for new mesages
       if (done) break;
 
+      // scroll
+      setTimeout(() => window.scrollToBottom ? window.scrollToBottom():null, 5);
+
       // Decode the chunk into a string
       const chunk = decoder.decode(value, { stream: true });
 
@@ -89,6 +102,9 @@ export default function App() {
                 newPrev[newPrev.length - 1] = { ...last, content: assistantMessage }; // this takes all the attributes of the last msg (so the role and content) but then overrides the content with the updated message
                 return newPrev; // returns the new messages[] to setMessages() to change the state and display in ui
               } else { // First time it creates a message
+                if (last.role == "break") { // break was needed to break up two assistants/tools in a row. Now that it has done so, it is no longer needed so it is removed
+                  prev.pop(); // this also helps fix the problem with the unsummarized tool output getting styled to opacity:0.5
+                }
                 return [...prev, { role: "assistant", content: assistantMessage }];
               }
             } else if (parsed.role == "tool") {
@@ -100,6 +116,9 @@ export default function App() {
                 newPrev[newPrev.length - 1] = { ...last, content: toolMessage }; // this takes all the attributes of the last msg (so the role and content) but then overrides the content with the updated message
                 return newPrev; // returns the new messages[] to setMessages() to change the state and display in ui
               } else { // First time it creates a message
+                if (last.role == "break") {
+                  prev.pop();
+                }
                 return [...prev, { role: "tool", content: toolMessage }];
               }
             } else if (parsed.role == "error") {
@@ -138,16 +157,21 @@ export default function App() {
       </header>
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div id="messagesContainer" className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((msg, i) => {
           if (msg.role === "break") return null
 
+          console.log('messages', messages);
+          var opac = ( (msg.role === "tool" && (i != (messages.length-1)) && messages[i+1].role == "tool" && (messages[i+1].content).indexOf('***Summarized ToolCall Output***') >= 0) ? 0.5 : 1 )
+
           return (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: (msg.role === "tool" && (i != (messages.length-1)) && (messages[i+1].content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") ? 0.5 : 1, y: 0 }}
-              transition={{ duration: 0.2 }}
+            <div
+              //key={i +  (i == messages.length-1 ? "":"r")} // forces React to rerender last message before another one is added. Makes unsummarized toolCall output fade immediately in real time
+              key={i + "_" + (opac+"")}
+              // initial={{ opacity: 0, y: 50 }}
+              // animate={{ opacity: opac, y: 0 }}
+              style={{opacity: opac}}
+              // transition={{ duration: 0.2 }}
               // style={{ opacity: (msg.role === "tool" && (i != (messages.length-1)) && (messages[i+1].content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") ? 0.1 : 1 }}
               className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-wrap ${
                 ( ()=>{
@@ -170,7 +194,7 @@ export default function App() {
               }`}
             >
               {msg.content}
-            </motion.div>
+            </div>
           )
         })}
       </div>
@@ -207,3 +231,57 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
+setTimeout(() => {
+  var isBottom = false;
+  var isAutoScrolling = false;
+  
+  var cont = document.getElementById('messagesContainer');
+  cont.addEventListener('scroll', function() {
+    if (isAutoScrolling) return;
+    isBottom = isScrolledToBottom(cont);
+    //console.log(isBottom);
+  });
+
+  function isScrolledToBottom(el, tolerance = 1) {
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - tolerance;
+  }
+
+  window.scrollToBottom = () => {
+    //if (isBottom == false) { return; }
+
+    isAutoScrolling = true;
+
+    cont.scrollTo({
+      top: cont.scrollHeight,
+      behavior: "smooth",
+    });
+
+    // Release lock after animation settles
+    setTimeout(() => {
+      isAutoScrolling = false;
+      isBottom = true;
+    }, 300);
+  }
+
+  // setInterval(() => {
+  //   if (isBottom) {
+  //     //cont.scrollTop = cont.scrollHeight;
+  //     cont.scrollTo({
+  //       top: cont.scrollHeight,
+  //       behavior: "smooth",
+  //     });
+
+  //     setTimeout(() => {
+  //       isAutoScrolling = true;
+  //       isBottom = true;
+  //     }, 300);
+  //   }
+  // }, 100);
+
+}, 1000);
+

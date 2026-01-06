@@ -122,7 +122,7 @@ func main() {
 }
 
 func sendMemory(w http.ResponseWriter, r *http.Request) {
-	fileName := "./chat/history.json"
+	fileName := "./chats/chat/history.json"
 
 	var messages []ChatMessage
 	//var filtered []ChatMessage
