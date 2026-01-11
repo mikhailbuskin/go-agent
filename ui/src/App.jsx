@@ -153,7 +153,7 @@ export default function App() {
     <div className="h-screen w-screen flex flex-col bg-gray-100 text-gray-900">
       {/* Header */}
       <header className="p-4 bg-white shadow-md font-semibold text-lg text-center">
-        AI Agent
+        YourPenTest AI Chat
       </header>
 
       {/* Chat Area */}

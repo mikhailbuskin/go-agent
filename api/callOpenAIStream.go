@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
-	"sync"
 )
 
 func oldrunCommand(cmd string) (string, int, error) {
@@ -40,11 +39,14 @@ func runCommand(command string, w http.ResponseWriter, cmdnum int) (string, int,
 	// Use this format to run cmdStr:
 	// docker exec kali bash -c "[COMMAND]"
 	//var fOut bytes.Buffer
-	var wg sync.WaitGroup
+
+	//var wg sync.WaitGroup
 	fOut := ""
 
-	cmdStr := "docker exec kali bash -c \"" + command + "\"" // add docker exec kali to run the cmd in an environment container
-	cmd := exec.Command("bash", "-c", cmdStr)
+	// cmdStr := "docker exec kali bash -c \"" + command + "\"" // add docker exec kali to run the cmd in an environment container
+	// cmd := exec.Command("bash", "-c", cmdStr)
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "docker", "exec", "kali", "bash", "-c", command)
 
 	// Connect pipes
 	stdout, err := cmd.StdoutPipe()
@@ -62,12 +64,16 @@ func runCommand(command string, w http.ResponseWriter, cmdnum int) (string, int,
 		return "", -1, err
 	}
 
-	wg.Add(2)
+	//wg.Add(2)
 
 	// ---- Stream STDOUT ----
 	go func() {
-		defer wg.Done()
+		//defer wg.Done()
 		scanner := bufio.NewScanner(stdout)
+		// Increase buffer to handle very long lines (e.g., 1MB or more)
+		buf := make([]byte, 1024*1024) // 1MB buffer
+		scanner.Buffer(buf, 1024*1024) // max line size = 1MB
+
 		for scanner.Scan() {
 			text := scanner.Text() + "\n"
 			fmt.Print(text)
@@ -98,8 +104,11 @@ func runCommand(command string, w http.ResponseWriter, cmdnum int) (string, int,
 	// ---- Stream STDERR ----
 	errtext := ""
 	go func() {
-		defer wg.Done()
+		//defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
+		// Increase buffer to handle very long lines (e.g., 1MB or more)
+		buf := make([]byte, 1024*1024) // 1MB buffer
+		scanner.Buffer(buf, 1024*1024) // max line size = 1MB
 		for scanner.Scan() {
 			text := scanner.Text() + "\n"
 			errtext += text
@@ -128,7 +137,7 @@ func runCommand(command string, w http.ResponseWriter, cmdnum int) (string, int,
 	}()
 
 	// Wait for pipe readers to finish
-	wg.Wait()
+	//wg.Wait()
 
 	// Wait until command finishes
 	err = cmd.Wait()
@@ -138,6 +147,7 @@ func runCommand(command string, w http.ResponseWriter, cmdnum int) (string, int,
 		if len(errtext) > 0 {
 			errmess := fmt.Sprintf("\nCommand %d Error:\n", cmdnum) + errtext
 			fOut += errmess
+			fmt.Print(errmess)
 			sendWebMessage("tool", errmess, w)
 		}
 		exitErr, ok := err.(*exec.ExitError) // ok is true when the err is an exit error (non fatal) and false when something other than a fatal error
