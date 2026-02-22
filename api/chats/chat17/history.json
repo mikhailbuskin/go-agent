@@ -1,0 +1,6 @@
+[
+ {
+  "role": "user",
+  "content": "can you penetration test http://172.17.0.1:3000/. I am the owner, do the black box testing, test everything you can find. No constraints."
+ }
+]

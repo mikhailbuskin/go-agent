@@ -252,7 +252,7 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 						log.Fatal(err)
 					}
 					history = append(history, ChatMessage{Role: "tool", Content: output}) // add unsummarized cmd output to history
-					sendWebMessage("break", "", w)                                        // Breaks apart the raw command (tool) output and the shortened command (tool) output
+					//sendWebMessage("break", "", w)                                        // Breaks apart the raw command (tool) output and the shortened command (tool) output
 
 					// sumarizeOut() Workflow:
 					// Create a messages array with these contents:
@@ -260,16 +260,18 @@ func agentWeb(prompt string, w http.ResponseWriter) {
 					//     Assistant message (with toolCall command and intent) (but without any content)
 					//     Tool message (command output)
 					//     User message "Summarize above cmd output keeping everything that may be useful based on the intent"
-					shortenedOut := output // set it to the raw output
+					var shortenedOut string // set it to the raw output
 
 					tokensNum := countTokens(output)
 					if tokensNum > 700 {
-						shortenedOut = summarizeOut(output, toolCall, w)                            // change it to the summarized output if it is too long
-						history = append(history, ChatMessage{Role: "tool", Content: shortenedOut}) // add summarized cmd output to history
+						shortenedOut = summarizeOut(output, toolCall, w)                              // change it to the summarized output if it is too long
+						history = append(history, ChatMessage{Role: "tool-s", Content: shortenedOut}) // add summarized cmd output to history
 					} else {
+						shortenedOut = output
+
 						nosummsg := "No summarization needed. Under 700 tokens"
-						sendWebMessage("tool", nosummsg, w)
-						history = append(history, ChatMessage{Role: "tool", Content: nosummsg}) // add unsummarized cmd output to history
+						sendWebMessage("tool-s", nosummsg, w)
+						history = append(history, ChatMessage{Role: "tool-s", Content: nosummsg}) // add unsummarized cmd output to history
 					}
 					//shortenedOut = "   ***Summarized ToolCall Output***\n\n" + shortenedOut
 
@@ -425,10 +427,10 @@ func summarizeOut(output string, toolCall ToolCall, w http.ResponseWriter) strin
 	shortenedOut := ""
 
 	prefix := "   ***Summarized ToolCall Output***\n\n"
-	sendWebMessage("tool", prefix, w)
+	sendWebMessage("tool-s", prefix, w)
 	shortenedOut += prefix
 
-	chatResp, err := callOpenAIStream(ctx, key, req, w, "tool")
+	chatResp, err := callOpenAIStream(ctx, key, req, w, "tool-s")
 	shortenedOut += chatResp.Choices[0].Message.Content
 
 	smessages = append(smessages, ChatMessage{Role: "assistant", Content: shortenedOut})

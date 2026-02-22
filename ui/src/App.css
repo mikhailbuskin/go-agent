@@ -1,0 +1,10 @@
+.my-message table td,
+.my-message table th {
+    border: 1px solid #ddd;
+    padding: 2px 6px;
+}
+.my-message * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box; /* Optional: ensures padding/border are included in element's total width/height */
+}

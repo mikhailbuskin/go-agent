@@ -111,15 +111,23 @@ export default function App() {
               //if(continuation==false) { setInput(""); } // only erase the textbox if you sent a message
               assistantMessage = ""; // so the message doesn't just keep adding on.
               //return [...prev, { role: "tool", content: parsed.content }];
-              if (last && last.role === "tool") { // After first time it adds onto that message when streaming
+              if (last && (last.role === "tool")) { // After first time it adds onto that message when streaming
                 const newPrev = [...prev];
                 newPrev[newPrev.length - 1] = { ...last, content: toolMessage }; // this takes all the attributes of the last msg (so the role and content) but then overrides the content with the updated message
                 return newPrev; // returns the new messages[] to setMessages() to change the state and display in ui
               } else { // First time it creates a message
-                if (last.role == "break") {
-                  prev.pop();
-                }
                 return [...prev, { role: "tool", content: toolMessage }];
+              }
+            } else if (parsed.role == "tool-s") {
+              //if(continuation==false) { setInput(""); } // only erase the textbox if you sent a message
+              assistantMessage = ""; // so the message doesn't just keep adding on.
+              //return [...prev, { role: "tool", content: parsed.content }];
+              if (last && (last.role === "tool-s")) { // After first time it adds onto that message when streaming
+                const newPrev = [...prev];
+                newPrev[newPrev.length - 1] = { ...last, content: toolMessage }; // this takes all the attributes of the last msg (so the role and content) but then overrides the content with the updated message
+                return newPrev; // returns the new messages[] to setMessages() to change the state and display in ui
+              } else { // First time it creates a message
+                return [...prev, { role: "tool-s", content: toolMessage }];
               }
             } else if (parsed.role == "error") {
               //return [...prev, { role: "tool", content: assistantMessage }]; // needs to show error
@@ -161,29 +169,24 @@ export default function App() {
         {messages.map((msg, i) => {
           if (msg.role === "break") return null
 
-          console.log('messages', messages);
-          var opac = ( (msg.role === "tool" && (i != (messages.length-1)) && messages[i+1].role == "tool" && (messages[i+1].content).indexOf('***Summarized ToolCall Output***') >= 0) ? 0.5 : 1 )
+          var opac = ( (msg.role === "tool" && (i != (messages.length-1)) && messages[i+1].role == "tool-s" && (messages[i+1].content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n" ) ? 0.5 : 1 )
 
           return (
             <div
               //key={i +  (i == messages.length-1 ? "":"r")} // forces React to rerender last message before another one is added. Makes unsummarized toolCall output fade immediately in real time
-              key={i + "_" + (opac+"")}
+              key={i + "_" + (opac+"")} // forces react to rerender when opacity changes
               // initial={{ opacity: 0, y: 50 }}
               // animate={{ opacity: opac, y: 0 }}
               style={{opacity: opac}}
               // transition={{ duration: 0.2 }}
               // style={{ opacity: (msg.role === "tool" && (i != (messages.length-1)) && (messages[i+1].content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") ? 0.1 : 1 }}
-              className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-wrap ${
+              className={`max-w-1/2 p-3 rounded-2xl shadow-sm text-sm whitespace-pre-wrap my-message ${
                 ( ()=>{
                   if(msg.role === "user") {
                     return "ml-auto bg-blue-500 text-white"
                   } else if (msg.role === "assistant") {
                     return "mr-auto bg-white"
-                  } /*else if (msg.role === "tool" && (msg.content).length >= 37 && (msg.content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") {
-                    return "mr-auto bg-gray-300"
-                  }*/ else if (msg.role === "tool" && (i != (messages.length-1)) && (messages[i+1].content).slice(0,37) == "   ***Summarized ToolCall Output***\n\n") { // if this msg isn't the last one in messages and the next one is summarized tool message
-                    return "mr-auto bg-gray-300"
-                  } else if (msg.role === "tool") {
+                  } else if (msg.role === "tool" || msg.role === "tool-s") {
                     return "mr-auto bg-gray-300"
                   }  else if (msg.role === "system") {
                     return "ml-auto bg-gray-300"
@@ -231,9 +234,6 @@ export default function App() {
     </div>
   );
 }
-
-
-
 
 
 setTimeout(() => {
